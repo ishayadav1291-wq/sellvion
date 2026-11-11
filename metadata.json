@@ -1,0 +1,6 @@
+{
+  "name": "SELLVION — Autonomous AI Employee for Indian E-Commerce",
+  "description": "Understand every customer, predict reorders, cut COD RTO returns, and automate personalized Hinglish WhatsApp follow-ups with earned autonomy.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
