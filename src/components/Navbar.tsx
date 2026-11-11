@@ -38,7 +38,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Paytm Logo Image from user attachment */}
             <div className="flex items-center">
               <img
-                src="/assets/aistudio/image_18826acc.png"
+                src="/assets/aistudio/image_6fa37345.png"
                 alt="Paytm"
                 className="h-6 sm:h-7 w-auto object-contain dark:brightness-110"
               />

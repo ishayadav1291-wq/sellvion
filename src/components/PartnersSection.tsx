@@ -8,7 +8,7 @@ export const PartnersSection: React.FC = () => {
       tag: 'Official Merchant Partner',
       description: 'Native sync with Paytm Soundbox, EDC POS machines, and All-in-One QR codes.',
       badge: 'Certified Integration',
-      logo: '/assets/aistudio/image_18826acc.png',
+      logo: '/assets/aistudio/image_6fa37345.png',
       isImage: true,
     },
     {

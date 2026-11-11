@@ -846,7 +846,7 @@ export default function App() {
             <div className="col-span-2 space-y-3">
               <div className="flex items-center gap-3">
                 <img
-                  src="/assets/aistudio/image_18826acc.png"
+                  src="/assets/aistudio/image_6fa37345.png"
                   alt="Paytm"
                   className="h-6 w-auto object-contain dark:brightness-110"
                 />
