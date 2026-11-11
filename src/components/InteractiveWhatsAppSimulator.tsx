@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Send, Sparkles, RefreshCw, CheckCheck, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Send, Sparkles, RefreshCw, CheckCheck, ShieldCheck, ArrowRight, Play, RotateCcw } from 'lucide-react';
 import { Customer } from '../types';
 
 interface InteractiveWhatsAppSimulatorProps {
@@ -145,32 +145,35 @@ export const InteractiveWhatsAppSimulator: React.FC<InteractiveWhatsAppSimulator
   const activeConfig = scenarioConfigs[selectedScenario];
 
   return (
-    <div className="bg-[#FAF9F5] dark:bg-[#121714] rounded-2xl border border-[#E8E6DF] dark:border-[#232B26] p-6 lg:p-8 shadow-xs transition-colors">
+    <div className="bg-[#F8FAFC] dark:bg-[#0F172A] rounded-2xl border border-[#E2E8F0] dark:border-[#1E293B] p-6 lg:p-8 shadow-sm transition-colors">
       {/* Header and Scenario Selector */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-[#EAE8E1] dark:border-[#232B26]">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-[#E2E8F0] dark:border-[#1E293B]">
         <div>
-          <div className="flex items-center gap-2 text-xs text-[#555C57] dark:text-[#9DA49F] mb-1">
-            <span>Conversational Agent Preview</span>
+          <div className="flex items-center gap-2 text-xs text-[#64748B] dark:text-[#94A3B8] mb-1">
+            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#E0F2FE] dark:bg-[#0C2E4E] text-[#0284C7] dark:text-[#38BDF8] font-semibold border border-[#BAE6FD] dark:border-[#1E3A5F]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#0284C7] dark:bg-[#38BDF8] animate-ping" />
+              Live Interactive Sandbox
+            </span>
             <span>·</span>
-            <span className="font-medium text-[#0F2E22] dark:text-[#34D399]">Autonomous Hinglish WhatsApp</span>
+            <span>Zero real charges or live dispatches</span>
           </div>
-          <h3 className="text-xl font-bold text-[#141B18] dark:text-[#F0F3F1] tracking-tight">
+          <h3 className="text-xl font-bold text-[#0F172A] dark:text-white tracking-tight">
             See how SELLVION engages Indian buyers
           </h3>
         </div>
 
-        {/* Interactive Scenario Tabs */}
-        <div className="flex items-center gap-1 p-1 bg-[#EFECE4] dark:bg-[#1B221E] rounded-xl overflow-x-auto">
+        {/* Interactive Scenario Tabs (Skyblue) */}
+        <div className="flex items-center gap-1 p-1 bg-[#E0F2FE] dark:bg-[#1E293B] rounded-xl overflow-x-auto">
           {(Object.keys(scenarioConfigs) as ScenarioKey[]).map((key) => {
             const isSelected = selectedScenario === key;
             return (
               <button
                 key={key}
                 onClick={() => handleScenarioChange(key)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all whitespace-nowrap shrink-0 ${
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all whitespace-nowrap shrink-0 cursor-pointer ${
                   isSelected
-                    ? 'bg-white dark:bg-[#25322A] text-[#0F2E22] dark:text-[#E8F5E9] shadow-xs font-semibold'
-                    : 'text-[#616862] dark:text-[#9DA49F] hover:text-[#141B18] dark:hover:text-[#F0F3F1]'
+                    ? 'bg-white dark:bg-[#0284C7] text-[#0284C7] dark:text-white shadow-xs font-semibold'
+                    : 'text-[#0369A1] dark:text-[#94A3B8] hover:text-[#0284C7] dark:hover:text-white'
                 }`}
               >
                 {scenarioConfigs[key].label}
@@ -185,36 +188,36 @@ export const InteractiveWhatsAppSimulator: React.FC<InteractiveWhatsAppSimulator
         {/* Left: Intelligence Context & Controls */}
         <div className="lg:col-span-6 space-y-5">
           {/* Autonomous Reasoning Card */}
-          <div className="bg-white dark:bg-[#161C19] rounded-xl border border-[#EAE8E1] dark:border-[#232B26] p-5 shadow-xs transition-colors">
+          <div className="bg-white dark:bg-[#132238] rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] p-5 shadow-2xs transition-colors">
             <div className="flex items-center justify-between gap-3 mb-3">
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-[#059669] dark:bg-[#34D399]" />
-                <span className="text-xs font-semibold text-[#0F2E22] dark:text-[#34D399] uppercase tracking-wider">
+                <span className="w-2 h-2 rounded-full bg-[#0284C7] dark:bg-[#38BDF8]" />
+                <span className="text-xs font-semibold text-[#0284C7] dark:text-[#38BDF8] uppercase tracking-wider">
                   AI Orchestrator Analysis
                 </span>
               </div>
-              <span className="text-xs text-[#6B726C] dark:text-[#8C948F] font-mono tabular-nums">
+              <span className="text-xs text-[#64748B] dark:text-[#94A3B8] font-mono tabular-nums">
                 Target: {activeConfig.customer} ({activeConfig.city})
               </span>
             </div>
 
-            <p className="text-sm text-[#2D332F] dark:text-[#D1D7D3] leading-relaxed mb-4">
+            <p className="text-sm text-[#334155] dark:text-[#CBD5E1] leading-relaxed mb-4">
               {activeConfig.context}
             </p>
 
-            <div className="flex items-center justify-between text-xs pt-3 border-t border-[#F2F0E8] dark:border-[#232B26] text-[#555C57] dark:text-[#8C948F]">
+            <div className="flex items-center justify-between text-xs pt-3 border-t border-[#F1F5F9] dark:border-[#1E293B] text-[#64748B] dark:text-[#94A3B8]">
               <span>Policy Guard: Consent verified ✓</span>
               <span>Quiet hours: In window (11:30 AM IST)</span>
             </div>
           </div>
 
           {/* Tone & AI Prompt Controls */}
-          <div className="bg-white dark:bg-[#161C19] rounded-xl border border-[#EAE8E1] dark:border-[#232B26] p-5 shadow-xs space-y-4 transition-colors">
+          <div className="bg-white dark:bg-[#132238] rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] p-5 shadow-2xs space-y-4 transition-colors">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-[#4A504B] dark:text-[#A7AFA9]">
+              <label className="text-xs font-medium text-[#475569] dark:text-[#CBD5E1]">
                 Conversational Persona & Tone
               </label>
-              <span className="text-xs text-[#059669] dark:text-[#34D399] font-medium flex items-center gap-1">
+              <span className="text-xs text-[#0284C7] dark:text-[#38BDF8] font-semibold flex items-center gap-1">
                 <Sparkles className="w-3 h-3" /> Powered by Gemini
               </span>
             </div>
@@ -228,10 +231,10 @@ export const InteractiveWhatsAppSimulator: React.FC<InteractiveWhatsAppSimulator
                 <button
                   key={tone.id}
                   onClick={() => setSelectedTone(tone.id as any)}
-                  className={`py-2 px-3 text-xs rounded-lg border text-center transition-all ${
+                  className={`py-2 px-3 text-xs rounded-lg border text-center transition-all cursor-pointer ${
                     selectedTone === tone.id
-                      ? 'border-[#0F2E22] dark:border-[#34D399] bg-[#F4F9F6] dark:bg-[#1E2E25] text-[#0F2E22] dark:text-[#E8F5E9] font-semibold'
-                      : 'border-[#EAE8E1] dark:border-[#28322C] bg-white dark:bg-[#1A221E] text-[#555C57] dark:text-[#9DA49F] hover:border-[#D0CDBF] dark:hover:border-[#3E4C43]'
+                      ? 'border-[#0284C7] dark:border-[#38BDF8] bg-[#F0F9FF] dark:bg-[#0C243B] text-[#0284C7] dark:text-[#7DD3FC] font-semibold shadow-xs'
+                      : 'border-[#E2E8F0] dark:border-[#1E293B] bg-white dark:bg-[#1E293B] text-[#64748B] dark:text-[#94A3B8] hover:border-[#BAE6FD]'
                   }`}
                 >
                   {tone.label}
@@ -243,7 +246,7 @@ export const InteractiveWhatsAppSimulator: React.FC<InteractiveWhatsAppSimulator
               <button
                 onClick={handleRegenerateWithGemini}
                 disabled={isGenerating}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0F2E22] dark:bg-[#1E4D3B] hover:bg-[#1A4535] dark:hover:bg-[#28634C] text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50 shadow-xs"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0284C7] hover:bg-[#0369A1] text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50 shadow-sm shadow-[#0284C7]/20 cursor-pointer"
               >
                 {isGenerating ? (
                   <>
@@ -252,7 +255,7 @@ export const InteractiveWhatsAppSimulator: React.FC<InteractiveWhatsAppSimulator
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-3.5 h-3.5 text-[#34D399]" />
+                    <Sparkles className="w-3.5 h-3.5 text-[#BAE6FD]" />
                     <span>Regenerate Message Draft</span>
                   </>
                 )}
@@ -261,7 +264,7 @@ export const InteractiveWhatsAppSimulator: React.FC<InteractiveWhatsAppSimulator
               <button
                 onClick={handleSimulateSend}
                 disabled={sentState !== 'idle'}
-                className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-[#E8F5E9] dark:bg-[#153426] hover:bg-[#D5ECD8] dark:hover:bg-[#1C4533] text-[#065F46] dark:text-[#34D399] text-xs font-semibold rounded-lg border border-[#C2E4C9] dark:border-[#214D38] transition-colors disabled:opacity-50 whitespace-nowrap"
+                className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-[#E0F2FE] hover:bg-[#BAE6FD] dark:bg-[#1E3A5F] dark:hover:bg-[#254A78] text-[#0369A1] dark:text-[#7DD3FC] text-xs font-semibold rounded-lg border border-[#BAE6FD] dark:border-[#2A4D7A] transition-colors disabled:opacity-50 whitespace-nowrap cursor-pointer"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>Simulate Send</span>
@@ -271,12 +274,12 @@ export const InteractiveWhatsAppSimulator: React.FC<InteractiveWhatsAppSimulator
 
           {/* Outcome Result Banner */}
           {sentState === 'replied' && (
-            <div className="bg-[#EBF7EE] dark:bg-[#122E1F] border border-[#BCE8C5] dark:border-[#23583A] rounded-xl p-4 text-[#14482B] dark:text-[#A7F3D0] flex items-center justify-between gap-3 animate-fadeIn transition-colors">
+            <div className="bg-[#F0F9FF] dark:bg-[#0C243B] border border-[#BAE6FD] dark:border-[#1E456E] rounded-xl p-4 text-[#0369A1] dark:text-[#BAE6FD] flex items-center justify-between gap-3 animate-fadeIn transition-colors">
               <div className="flex items-center gap-2.5">
-                <ShieldCheck className="w-5 h-5 text-[#059669] dark:text-[#34D399] shrink-0" />
+                <ShieldCheck className="w-5 h-5 text-[#0284C7] dark:text-[#38BDF8] shrink-0" />
                 <div>
-                  <div className="text-xs font-bold uppercase tracking-wider text-[#0F5132] dark:text-[#6EE7B7]">
-                    Customer Responded
+                  <div className="text-xs font-bold uppercase tracking-wider text-[#0284C7] dark:text-[#38BDF8]">
+                    Customer Responded (Simulated)
                   </div>
                   <div className="text-xs font-semibold mt-0.5">
                     {activeConfig.impactLabel}
@@ -288,9 +291,10 @@ export const InteractiveWhatsAppSimulator: React.FC<InteractiveWhatsAppSimulator
                   setSentState('idle');
                   setCustomerReply('');
                 }}
-                className="text-xs text-[#065F46] dark:text-[#34D399] underline hover:text-[#043E2E] dark:hover:text-[#6EE7B7]"
+                className="text-xs text-[#0284C7] dark:text-[#38BDF8] underline hover:text-[#0369A1] cursor-pointer flex items-center gap-1"
               >
-                Reset
+                <RotateCcw className="w-3 h-3" />
+                <span>Reset</span>
               </button>
             </div>
           )}
@@ -298,47 +302,47 @@ export const InteractiveWhatsAppSimulator: React.FC<InteractiveWhatsAppSimulator
 
         {/* Right: Modern Smartphone Mockup */}
         <div className="lg:col-span-6 flex justify-center">
-          <div className="w-full max-w-[340px] bg-[#FFFFFF] dark:bg-[#1A221E] rounded-[2.25rem] p-3 shadow-lg border border-[#D5D2C8] dark:border-[#2D3932] ring-8 ring-[#ECE9DF] dark:ring-[#141B17] transition-colors">
+          <div className="w-full max-w-[340px] bg-white dark:bg-[#132238] rounded-[2.25rem] p-3 shadow-xl border border-[#E2E8F0] dark:border-[#1E293B] ring-8 ring-[#F1F5F9] dark:ring-[#0B1320] transition-colors">
             {/* Phone Speaker & Camera Notch */}
-            <div className="w-28 h-4 bg-[#E0DED5] dark:bg-[#25302A] rounded-full mx-auto mb-3" />
+            <div className="w-28 h-4 bg-[#E2E8F0] dark:bg-[#1E293B] rounded-full mx-auto mb-3" />
 
-            {/* WhatsApp Header */}
-            <div className="bg-[#075E54] dark:bg-[#0E443C] text-white rounded-t-2xl p-3 flex items-center justify-between">
+            {/* WhatsApp Header (Sky Blue) */}
+            <div className="bg-[#0284C7] text-white rounded-t-2xl p-3 flex items-center justify-between shadow-xs">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-[#128C7E] flex items-center justify-center font-bold text-xs text-white">
+                <div className="w-8 h-8 rounded-full bg-[#0369A1] flex items-center justify-center font-bold text-xs text-white">
                   {activeConfig.customer.charAt(0)}
                 </div>
                 <div>
                   <div className="text-xs font-semibold leading-tight">
                     {activeConfig.customer}
                   </div>
-                  <div className="text-[10px] text-[#A7F3D0] leading-none mt-0.5">
+                  <div className="text-[10px] text-[#E0F2FE] leading-none mt-0.5">
                     Online · Business Verified
                   </div>
                 </div>
               </div>
-              <span className="text-[10px] text-white/80 font-mono">WhatsApp</span>
+              <span className="text-[10px] text-white/90 font-mono">WhatsApp</span>
             </div>
 
             {/* WhatsApp Chat Body */}
-            <div className="bg-[#EFEAE2] dark:bg-[#0B1410] p-3 min-h-[300px] flex flex-col justify-end space-y-3 rounded-b-2xl transition-colors">
+            <div className="bg-[#F8FAFC] dark:bg-[#0A101D] p-3 min-h-[300px] flex flex-col justify-end space-y-3 rounded-b-2xl transition-colors">
               {/* Date separator */}
               <div className="text-center">
-                <span className="text-[10px] bg-[#E1DDD5] dark:bg-[#1B2720] text-[#555C57] dark:text-[#8C948F] px-2 py-0.5 rounded shadow-2xs font-mono">
+                <span className="text-[10px] bg-[#E2E8F0] dark:bg-[#1E293B] text-[#64748B] dark:text-[#94A3B8] px-2 py-0.5 rounded shadow-2xs font-mono">
                   Today
                 </span>
               </div>
 
               {/* Merchant Outgoing Message Bubble */}
-              <div className="bg-[#E7FDE1] dark:bg-[#0E3A28] text-[#111B21] dark:text-[#EAECE9] rounded-xl rounded-tr-xs p-3 ml-6 shadow-2xs border border-[#CDE5C8] dark:border-[#1A4D38] relative">
+              <div className="bg-[#E0F2FE] dark:bg-[#0C2E4E] text-[#0F172A] dark:text-[#F8FAFC] rounded-xl rounded-tr-xs p-3 ml-6 shadow-2xs border border-[#BAE6FD] dark:border-[#194572] relative">
                 <p className="text-xs leading-relaxed break-words whitespace-pre-wrap">
                   {messageText}
                 </p>
-                <div className="flex items-center justify-end gap-1 mt-1 text-[9px] text-[#667781] dark:text-[#8FA098]">
+                <div className="flex items-center justify-end gap-1 mt-1 text-[9px] text-[#64748B] dark:text-[#94A3B8]">
                   <span>11:32 AM</span>
                   <CheckCheck
                     className={`w-3 h-3 ${
-                      sentState !== 'idle' ? 'text-[#34B7F1]' : 'text-[#8696A0] dark:text-[#5A6D63]'
+                      sentState !== 'idle' ? 'text-[#0284C7]' : 'text-[#94A3B8]'
                     }`}
                   />
                 </div>
@@ -346,9 +350,9 @@ export const InteractiveWhatsAppSimulator: React.FC<InteractiveWhatsAppSimulator
 
               {/* Customer Incoming Message Reply Bubble */}
               {customerReply && (
-                <div className="bg-white dark:bg-[#1A2620] text-[#111B21] dark:text-[#EAECE9] rounded-xl rounded-tl-xs p-3 mr-6 shadow-2xs border border-[#E2DFD8] dark:border-[#283830] animate-fadeIn">
+                <div className="bg-white dark:bg-[#132238] text-[#0F172A] dark:text-[#F8FAFC] rounded-xl rounded-tl-xs p-3 mr-6 shadow-2xs border border-[#E2E8F0] dark:border-[#1E293B] animate-fadeIn">
                   <p className="text-xs leading-relaxed">{customerReply}</p>
-                  <div className="flex items-center justify-end gap-1 mt-1 text-[9px] text-[#667781] dark:text-[#8FA098]">
+                  <div className="flex items-center justify-end gap-1 mt-1 text-[9px] text-[#64748B] dark:text-[#94A3B8]">
                     <span>11:34 AM</span>
                   </div>
                 </div>
@@ -356,7 +360,7 @@ export const InteractiveWhatsAppSimulator: React.FC<InteractiveWhatsAppSimulator
             </div>
 
             {/* Phone bottom bar */}
-            <div className="w-24 h-1 bg-[#D0CDC2] dark:bg-[#2C3831] rounded-full mx-auto mt-3 mb-1" />
+            <div className="w-24 h-1 bg-[#CBD5E1] dark:bg-[#1E293B] rounded-full mx-auto mt-3 mb-1" />
           </div>
         </div>
       </div>

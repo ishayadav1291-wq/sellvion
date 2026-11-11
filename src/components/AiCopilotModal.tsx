@@ -111,21 +111,21 @@ export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-      <div className="bg-[#FAF9F5] dark:bg-[#121714] rounded-2xl max-w-xl w-full h-[620px] shadow-2xl border border-[#DDD9CF] dark:border-[#232B26] flex flex-col overflow-hidden transition-colors">
+      <div className="bg-[#F8FAFC] dark:bg-[#0B1320] rounded-2xl max-w-xl w-full h-[620px] shadow-2xl border border-[#CBD5E1] dark:border-[#1E3A5F] flex flex-col overflow-hidden transition-colors">
         {/* Header */}
-        <div className="px-5 py-4 bg-white dark:bg-[#161C19] border-b border-[#EAE8E1] dark:border-[#232B26] flex items-center justify-between transition-colors">
+        <div className="px-5 py-4 bg-white dark:bg-[#132238] border-b border-[#E2E8F0] dark:border-[#1E3A5F] flex items-center justify-between transition-colors">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#0F2E22] dark:bg-[#1E4D3B] text-[#E8F5E9] flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-[#34D399]" />
+            <div className="w-8 h-8 rounded-lg bg-[#0284C7] text-white flex items-center justify-center shadow-xs">
+              <Sparkles className="w-4 h-4 text-[#BAE6FD]" />
             </div>
             <div>
-              <div className="text-xs font-bold text-[#141B18] dark:text-[#F0F3F1] flex items-center gap-1.5">
+              <div className="text-xs font-bold text-[#0F172A] dark:text-[#F8FAFC] flex items-center gap-1.5">
                 <span>SELLVION Copilot</span>
-                <span className="text-[10px] text-[#059669] dark:text-[#34D399] font-medium font-mono">
+                <span className="text-[10px] text-[#0284C7] dark:text-[#38BDF8] font-medium font-mono">
                   Autonomous Teammate
                 </span>
               </div>
-              <div className="text-[10px] text-[#6B726C] dark:text-[#8C948F]">
+              <div className="text-[10px] text-[#64748B] dark:text-[#94A3B8]">
                 Connected to store orders, customer cadences, and udhaar ledger
               </div>
             </div>
@@ -133,7 +133,7 @@ export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-1.5 text-[#6B726C] dark:text-[#8C948F] hover:text-[#141B18] dark:hover:text-white hover:bg-[#EAE8DF] dark:hover:bg-[#1E2622] rounded-lg transition-colors"
+            className="p-1.5 text-[#64748B] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-white hover:bg-[#F1F5F9] dark:hover:bg-[#1B2E4B] rounded-lg transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -149,16 +149,16 @@ export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
               }`}
             >
               {msg.sender === 'assistant' && (
-                <div className="w-6 h-6 rounded-md bg-[#0F2E22] dark:bg-[#1E4D3B] text-white flex items-center justify-center shrink-0 mt-0.5">
-                  <Bot className="w-3.5 h-3.5 text-[#34D399]" />
+                <div className="w-6 h-6 rounded-md bg-[#0284C7] text-white flex items-center justify-center shrink-0 mt-0.5">
+                  <Bot className="w-3.5 h-3.5 text-[#BAE6FD]" />
                 </div>
               )}
 
               <div
                 className={`max-w-[80%] p-3 rounded-xl leading-relaxed whitespace-pre-wrap ${
                   msg.sender === 'user'
-                    ? 'bg-[#0F2E22] dark:bg-[#1E4D3B] text-white rounded-tr-xs'
-                    : 'bg-white dark:bg-[#18221D] border border-[#EAE8E1] dark:border-[#28352E] text-[#2D332F] dark:text-[#E8ECE9] rounded-tl-xs shadow-2xs'
+                    ? 'bg-[#0284C7] text-white rounded-tr-xs shadow-sm shadow-[#0284C7]/20'
+                    : 'bg-white dark:bg-[#132238] border border-[#E2E8F0] dark:border-[#1E3A5F] text-[#0F172A] dark:text-[#F8FAFC] rounded-tl-xs shadow-2xs'
                 }`}
               >
                 {msg.text}
@@ -167,9 +167,9 @@ export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
           ))}
 
           {isLoading && (
-            <div className="flex gap-2.5 text-xs items-center text-[#555C57] dark:text-[#9DA49F]">
-              <div className="w-6 h-6 rounded-md bg-[#0F2E22] dark:bg-[#1E4D3B] text-white flex items-center justify-center shrink-0">
-                <RefreshCw className="w-3.5 h-3.5 text-[#34D399] animate-spin" />
+            <div className="flex gap-2.5 text-xs items-center text-[#64748B] dark:text-[#94A3B8]">
+              <div className="w-6 h-6 rounded-md bg-[#0284C7] text-white flex items-center justify-center shrink-0">
+                <RefreshCw className="w-3.5 h-3.5 text-[#BAE6FD] animate-spin" />
               </div>
               <span className="italic">SELLVION is analyzing customer graph...</span>
             </div>
@@ -177,13 +177,13 @@ export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
         </div>
 
         {/* Quick Prompt Chips */}
-        <div className="px-4 py-2 border-t border-[#EAE8E1] dark:border-[#232B26] bg-white dark:bg-[#161C19] flex items-center gap-1.5 overflow-x-auto text-[11px] transition-colors">
-          <span className="text-[#6B726C] dark:text-[#8C948F] shrink-0 font-medium">Try:</span>
+        <div className="px-4 py-2 border-t border-[#E2E8F0] dark:border-[#1E3A5F] bg-white dark:bg-[#132238] flex items-center gap-1.5 overflow-x-auto text-[11px] transition-colors">
+          <span className="text-[#64748B] dark:text-[#94A3B8] shrink-0 font-medium">Try:</span>
           {quickPrompts.map((qp, idx) => (
             <button
               key={idx}
               onClick={() => handleSendMessage(qp)}
-              className="px-2.5 py-1 rounded-md bg-[#FAF9F5] dark:bg-[#1E2722] border border-[#EAE8E1] dark:border-[#2D3932] hover:border-[#BFBCB0] dark:hover:border-[#415347] text-[#4A504B] dark:text-[#C5CCC7] whitespace-nowrap shrink-0 transition-colors"
+              className="px-2.5 py-1 rounded-md bg-[#F8FAFC] dark:bg-[#0B1320] border border-[#E2E8F0] dark:border-[#1E3A5F] hover:border-[#0284C7] dark:hover:border-[#38BDF8] text-[#334155] dark:text-[#CBD5E1] hover:text-[#0284C7] dark:hover:text-[#38BDF8] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
             >
               {qp}
             </button>
@@ -191,7 +191,7 @@ export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
         </div>
 
         {/* Input Bar */}
-        <div className="p-3 bg-white dark:bg-[#161C19] border-t border-[#EAE8E1] dark:border-[#232B26] transition-colors">
+        <div className="p-3 bg-white dark:bg-[#132238] border-t border-[#E2E8F0] dark:border-[#1E3A5F] transition-colors">
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -204,14 +204,14 @@ export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
               placeholder="Ask anything about customer behaviour, COD risks, or udhaar..."
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              className="flex-1 text-xs py-2 px-3 bg-[#FAF9F5] dark:bg-[#1A241F] border border-[#DDD9CF] dark:border-[#2D3932] rounded-xl text-[#141B18] dark:text-[#E8ECE9] placeholder-[#8C8F8A] dark:placeholder-[#6C7670] focus:outline-none focus:ring-1 focus:ring-[#0F2E22] dark:focus:ring-[#34D399]"
+              className="flex-1 text-xs py-2 px-3 bg-[#F8FAFC] dark:bg-[#0B1320] border border-[#CBD5E1] dark:border-[#1E3A5F] rounded-xl text-[#0F172A] dark:text-[#F8FAFC] placeholder-[#94A3B8] dark:placeholder-[#64748B] focus:outline-none focus:ring-1 focus:ring-[#0284C7] dark:focus:ring-[#38BDF8]"
             />
             <button
               type="submit"
               disabled={isLoading || !inputText.trim()}
-              className="p-2 bg-[#0F2E22] dark:bg-[#1E4D3B] text-white rounded-xl hover:bg-[#1A4535] dark:hover:bg-[#28634C] transition-colors disabled:opacity-40"
+              className="p-2 bg-[#0284C7] hover:bg-[#0369A1] text-white rounded-xl transition-colors disabled:opacity-40 cursor-pointer shadow-sm shadow-[#0284C7]/20"
             >
-              <Send className="w-4 h-4 text-[#34D399]" />
+              <Send className="w-4 h-4 text-[#BAE6FD]" />
             </button>
           </form>
         </div>

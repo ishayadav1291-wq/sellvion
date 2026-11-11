@@ -1,212 +1,222 @@
-import React from 'react';
-import { Bot, Sparkles, LayoutDashboard, Send, ShieldCheck, Sun, Moon } from 'lucide-react';
+import React, { useState } from 'react';
+import { Bot, Sparkles, LayoutDashboard, Send, ShieldCheck, Sun, Moon, ChevronDown, ArrowRight, X } from 'lucide-react';
 
 interface NavbarProps {
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
+  onOpenConsole: (view?: string) => void;
   pendingCount: number;
-  onOpenCopilot: () => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
+  onResetData?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  activeTab,
-  setActiveTab,
+  onOpenConsole,
   pendingCount,
-  onOpenCopilot,
   theme,
   onToggleTheme,
+  onResetData,
 }) => {
+  const [featuresDropdownOpen, setFeaturesDropdownOpen] = useState(false);
+
+  const scrollToSection = (id: string) => {
+    setFeaturesDropdownOpen(false);
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
-    <header className="sticky top-0 z-40 bg-[#FAF9F5]/90 dark:bg-[#0E1210]/90 backdrop-blur-md border-b border-[#EAE8E1] dark:border-[#232B26] transition-colors">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-8">
-        {/* Zone 1: Single text wordmark */}
+    <header className="sticky top-0 z-40 bg-white/95 dark:bg-[#0B1320]/95 backdrop-blur-md border-b border-[#E2E8F0] dark:border-[#1E293B] transition-colors">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between gap-6">
+        {/* Left: Paytm | SELLVION Co-Branding Lockup */}
         <div className="flex items-center gap-3 shrink-0">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className="flex items-center gap-2.5 text-left focus:outline-none group"
+          <a
+            href="#home"
+            className="flex items-center gap-3 text-left focus:outline-none group cursor-pointer"
           >
-            <div className="w-8 h-8 rounded-lg bg-[#0F2E22] dark:bg-[#1E4D3B] text-[#E8F5E9] flex items-center justify-center font-bold text-sm tracking-wider shadow-sm group-hover:bg-[#184534] dark:group-hover:bg-[#28634C] transition-colors">
-              S
+            {/* Paytm Logo Image from user attachment */}
+            <div className="flex items-center">
+              <img
+                src="/assets/aistudio/image_18826acc.png"
+                alt="Paytm"
+                className="h-6 sm:h-7 w-auto object-contain dark:brightness-110"
+              />
             </div>
-            <span className="text-xl font-bold tracking-tight text-[#141B18] dark:text-[#F0F3F1] font-sans">
-              SELLVION
-            </span>
-          </button>
+
+            {/* Vertical Divider */}
+            <span className="h-6 w-px bg-[#CBD5E1] dark:bg-[#334155]" />
+
+            {/* SELLVION Icon & Wordmark */}
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#6366F1] via-[#0066FF] to-[#00BAF2] text-white flex items-center justify-center font-bold text-sm tracking-wider shadow-sm shadow-[#0066FF]/25">
+                S
+              </div>
+              <div className="flex flex-col">
+                <span className="text-lg font-extrabold tracking-tight text-[#0F1E36] dark:text-[#F8FAFC] font-display leading-tight">
+                  SELLVION
+                </span>
+                <span className="text-[10px] text-[#64748B] dark:text-[#94A3B8] font-medium tracking-tight -mt-0.5">
+                  AI Merchant Teammate
+                </span>
+              </div>
+            </div>
+          </a>
         </div>
 
-        {/* Zone 2: Navigation Links */}
-        <nav className="hidden lg:flex items-center gap-1 text-sm font-medium text-[#555C57] dark:text-[#9DA49F]">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap shrink-0 ${
-              activeTab === 'overview'
-                ? 'text-[#0F2E22] dark:text-[#E8F5E9] bg-[#EAE8DF] dark:bg-[#1E2622] font-semibold'
-                : 'hover:text-[#141B18] dark:hover:text-[#F0F3F1] hover:bg-[#F2F1EA] dark:hover:bg-[#18201C]'
-            }`}
+        {/* Center: Navigation Links Matching Marketing Screenshot */}
+        <nav className="hidden lg:flex items-center gap-1.5 text-xs font-semibold text-[#475569] dark:text-[#94A3B8]">
+          <a
+            href="#home"
+            className="px-3.5 py-1.5 rounded-full bg-[#EAF2FF] dark:bg-[#0C243B] text-[#0066FF] dark:text-[#38BDF8] transition-all cursor-pointer font-bold"
           >
-            Overview & Demo
-          </button>
+            Home
+          </a>
 
-          <button
-            onClick={() => setActiveTab('inbox')}
-            className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
-              activeTab === 'inbox'
-                ? 'text-[#0F2E22] dark:text-[#E8F5E9] bg-[#EAE8DF] dark:bg-[#1E2622] font-semibold'
-                : 'hover:text-[#141B18] dark:hover:text-[#F0F3F1] hover:bg-[#F2F1EA] dark:hover:bg-[#18201C]'
-            }`}
-          >
-            <span>Approval Inbox</span>
-            {pendingCount > 0 && (
-              <span className="text-xs bg-[#0F2E22] dark:bg-[#235843] text-white px-1.5 py-0.2 rounded-full font-mono tabular-nums">
-                {pendingCount}
-              </span>
+          {/* Features Dropdown Menu */}
+          <div className="relative">
+            <button
+              onClick={() => setFeaturesDropdownOpen(!featuresDropdownOpen)}
+              className="px-3 py-1.5 rounded-full hover:text-[#0066FF] dark:hover:text-[#38BDF8] hover:bg-[#F8FAFC] dark:hover:bg-[#132238]/60 transition-all flex items-center gap-1 cursor-pointer"
+            >
+              <span>Features</span>
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+
+            {featuresDropdownOpen && (
+              <div
+                className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-[#132238] rounded-2xl shadow-xl border border-[#BAE6FD] dark:border-[#1E3A5F] p-2 space-y-1 animate-fadeIn z-50 text-xs"
+                onMouseLeave={() => setFeaturesDropdownOpen(false)}
+              >
+                <button
+                  onClick={() => scrollToSection('features-cod')}
+                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-[#F0F9FF] dark:hover:bg-[#1A2E4C] text-[#0F172A] dark:text-[#F8FAFC] flex items-center justify-between cursor-pointer"
+                >
+                  <div>
+                    <div className="font-semibold">COD Risk Protection</div>
+                    <div className="text-[10px] text-[#64748B]">Slashes returns from 26% to 11%</div>
+                  </div>
+                  <span className="text-[10px] text-[#DC2626] font-mono">11.8%</span>
+                </button>
+
+                <button
+                  onClick={() => scrollToSection('features-reorder')}
+                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-[#F0F9FF] dark:hover:bg-[#1A2E4C] text-[#0F172A] dark:text-[#F8FAFC] flex items-center justify-between cursor-pointer"
+                >
+                  <div>
+                    <div className="font-semibold">Predictive Reorder Cadence</div>
+                    <div className="text-[10px] text-[#64748B]">Automates repeat purchase prompts</div>
+                  </div>
+                  <span className="text-[10px] text-[#0066FF] font-mono">+22%</span>
+                </button>
+
+                <button
+                  onClick={() => scrollToSection('features-udhaar')}
+                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-[#F0F9FF] dark:hover:bg-[#1A2E4C] text-[#0F172A] dark:text-[#F8FAFC] flex items-center justify-between cursor-pointer"
+                >
+                  <div>
+                    <div className="font-semibold">Udhaar & Bahi-Khata</div>
+                    <div className="text-[10px] text-[#64748B]">Gentle WhatsApp recovery with UPI QR</div>
+                  </div>
+                  <span className="text-[10px] text-[#16A34A] font-mono">UPI</span>
+                </button>
+
+                <button
+                  onClick={() => scrollToSection('features-autonomy')}
+                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-[#F0F9FF] dark:hover:bg-[#1A2E4C] text-[#0F172A] dark:text-[#F8FAFC] flex items-center justify-between cursor-pointer"
+                >
+                  <div>
+                    <div className="font-semibold">Earned Autonomy Policy</div>
+                    <div className="text-[10px] text-[#64748B]">Human-in-the-loop owner approval</div>
+                  </div>
+                  <span className="text-[10px] text-[#0066FF] font-mono">FR-016</span>
+                </button>
+              </div>
             )}
-          </button>
+          </div>
 
-          <button
-            onClick={() => setActiveTab('customers')}
-            className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap shrink-0 ${
-              activeTab === 'customers'
-                ? 'text-[#0F2E22] dark:text-[#E8F5E9] bg-[#EAE8DF] dark:bg-[#1E2622] font-semibold'
-                : 'hover:text-[#141B18] dark:hover:text-[#F0F3F1] hover:bg-[#F2F1EA] dark:hover:bg-[#18201C]'
-            }`}
+          <a
+            href="#how-it-works"
+            className="px-3 py-1.5 rounded-full hover:text-[#0066FF] dark:hover:text-[#38BDF8] hover:bg-[#F8FAFC] dark:hover:bg-[#132238]/60 transition-all cursor-pointer"
           >
-            Customer 360
-          </button>
+            How it Works
+          </a>
 
-          <button
-            onClick={() => setActiveTab('cod-risk')}
-            className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap shrink-0 ${
-              activeTab === 'cod-risk'
-                ? 'text-[#0F2E22] dark:text-[#E8F5E9] bg-[#EAE8DF] dark:bg-[#1E2622] font-semibold'
-                : 'hover:text-[#141B18] dark:hover:text-[#F0F3F1] hover:bg-[#F2F1EA] dark:hover:bg-[#18201C]'
-            }`}
+          <a
+            href="#pricing"
+            className="px-3 py-1.5 rounded-full hover:text-[#0066FF] dark:hover:text-[#38BDF8] hover:bg-[#F8FAFC] dark:hover:bg-[#132238]/60 transition-all cursor-pointer"
           >
-            COD Protection
-          </button>
+            Pricing
+          </a>
 
-          <button
-            onClick={() => setActiveTab('udhaar')}
-            className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap shrink-0 ${
-              activeTab === 'udhaar'
-                ? 'text-[#0F2E22] dark:text-[#E8F5E9] bg-[#EAE8DF] dark:bg-[#1E2622] font-semibold'
-                : 'hover:text-[#141B18] dark:hover:text-[#F0F3F1] hover:bg-[#F2F1EA] dark:hover:bg-[#18201C]'
-            }`}
+          <a
+            href="#partners"
+            className="px-3 py-1.5 rounded-full hover:text-[#0066FF] dark:hover:text-[#38BDF8] hover:bg-[#F8FAFC] dark:hover:bg-[#132238]/60 transition-all cursor-pointer"
           >
-            Udhaar Khata
-          </button>
+            Partners
+          </a>
 
-          <button
-            onClick={() => setActiveTab('autonomy')}
-            className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap shrink-0 ${
-              activeTab === 'autonomy'
-                ? 'text-[#0F2E22] dark:text-[#E8F5E9] bg-[#EAE8DF] dark:bg-[#1E2622] font-semibold'
-                : 'hover:text-[#141B18] dark:hover:text-[#F0F3F1] hover:bg-[#F2F1EA] dark:hover:bg-[#18201C]'
-            }`}
+          <a
+            href="#faq"
+            className="px-3 py-1.5 rounded-full hover:text-[#0066FF] dark:hover:text-[#38BDF8] hover:bg-[#F8FAFC] dark:hover:bg-[#132238]/60 transition-all cursor-pointer"
           >
-            Earned Autonomy
-          </button>
-
-          <button
-            onClick={() => setActiveTab('metrics')}
-            className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap shrink-0 ${
-              activeTab === 'metrics'
-                ? 'text-[#0F2E22] dark:text-[#E8F5E9] bg-[#EAE8DF] dark:bg-[#1E2622] font-semibold'
-                : 'hover:text-[#141B18] dark:hover:text-[#F0F3F1] hover:bg-[#F2F1EA] dark:hover:bg-[#18201C]'
-            }`}
-          >
-            Incremental ROI
-          </button>
-
-          <button
-            onClick={() => setActiveTab('comparison')}
-            className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap shrink-0 ${
-              activeTab === 'comparison'
-                ? 'text-[#0F2E22] dark:text-[#E8F5E9] bg-[#EAE8DF] dark:bg-[#1E2622] font-semibold'
-                : 'hover:text-[#141B18] dark:hover:text-[#F0F3F1] hover:bg-[#F2F1EA] dark:hover:bg-[#18201C]'
-            }`}
-          >
-            Compare
-          </button>
+            Resources
+          </a>
         </nav>
 
-        {/* Zone 3: Actions + Global Theme Toggle */}
+        {/* Right: Actions Matching Screenshot */}
         <div className="flex items-center gap-2.5 shrink-0">
-          {/* Global Theme Toggle Button */}
+          {/* Global Theme Toggle */}
           <button
             onClick={onToggleTheme}
             aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
             title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-            className="p-2 text-[#555C57] dark:text-[#A7AFA9] bg-white dark:bg-[#161C19] border border-[#DDD9CF] dark:border-[#28322C] rounded-lg hover:border-[#B8B4A6] dark:hover:border-[#3E4C43] hover:text-[#141B18] dark:hover:text-white transition-colors shadow-2xs whitespace-nowrap shrink-0"
+            className="p-2 text-[#64748B] dark:text-[#94A3B8] bg-[#F8FAFC] dark:bg-[#132238] border border-[#E2E8F0] dark:border-[#1E293B] rounded-xl hover:border-[#BAE6FD] hover:text-[#0066FF] transition-colors cursor-pointer"
           >
-            {theme === 'light' ? (
-              <Moon className="w-4 h-4 text-[#4A5568]" />
-            ) : (
-              <Sun className="w-4 h-4 text-[#FBBF24]" />
+            {theme === 'light' ? <Moon className="w-4 h-4 text-[#475569]" /> : <Sun className="w-4 h-4 text-[#38BDF8]" />}
+          </button>
+
+          {/* Login Button (Launches Merchant Workspace) */}
+          <button
+            onClick={() => onOpenConsole('inbox')}
+            className="px-4 py-2 text-xs font-semibold text-[#0F1E36] dark:text-[#F8FAFC] bg-white dark:bg-[#132238] border border-[#CBD5E1] dark:border-[#1E3A5F] hover:border-[#0066FF] dark:hover:border-[#38BDF8] rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+          >
+            <span>Login</span>
+            {pendingCount > 0 && (
+              <span className="w-2 h-2 rounded-full bg-[#0066FF] animate-pulse" />
             )}
           </button>
 
+          {/* Primary CTA */}
           <button
-            onClick={onOpenCopilot}
-            className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-[#0F2E22] dark:text-[#E8F5E9] bg-white dark:bg-[#161C19] border border-[#DDD9CF] dark:border-[#28322C] rounded-lg hover:border-[#B8B4A6] dark:hover:border-[#3E4C43] hover:bg-[#FAF9F5] dark:hover:bg-[#1C2420] shadow-2xs transition-colors whitespace-nowrap shrink-0"
+            onClick={() => onOpenConsole('inbox')}
+            className="px-4 py-2 text-xs font-bold text-white bg-[#0066FF] hover:bg-[#0052CC] rounded-xl shadow-md shadow-[#0066FF]/25 hover:shadow-lg transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
           >
-            <Sparkles className="w-3.5 h-3.5 text-[#059669] dark:text-[#34D399]" />
-            <span>Ask AI Employee</span>
+            <span>Get Started Free</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Mobile nav bar for smaller viewports */}
-      <div className="lg:hidden flex items-center gap-1 px-4 py-2 overflow-x-auto border-t border-[#EAE8E1] dark:border-[#232B26] bg-[#FAF9F5] dark:bg-[#0E1210] text-xs">
-        <button
-          onClick={() => setActiveTab('overview')}
-          className={`px-2.5 py-1 rounded-md shrink-0 ${activeTab === 'overview' ? 'bg-[#0F2E22] dark:bg-[#1E4D3B] text-white' : 'text-[#555C57] dark:text-[#9DA49F]'}`}
-        >
-          Overview
-        </button>
-        <button
-          onClick={() => setActiveTab('inbox')}
-          className={`px-2.5 py-1 rounded-md shrink-0 ${activeTab === 'inbox' ? 'bg-[#0F2E22] dark:bg-[#1E4D3B] text-white' : 'text-[#555C57] dark:text-[#9DA49F]'}`}
-        >
-          Inbox ({pendingCount})
-        </button>
-        <button
-          onClick={() => setActiveTab('customers')}
-          className={`px-2.5 py-1 rounded-md shrink-0 ${activeTab === 'customers' ? 'bg-[#0F2E22] dark:bg-[#1E4D3B] text-white' : 'text-[#555C57] dark:text-[#9DA49F]'}`}
-        >
-          Customers 360
-        </button>
-        <button
-          onClick={() => setActiveTab('cod-risk')}
-          className={`px-2.5 py-1 rounded-md shrink-0 ${activeTab === 'cod-risk' ? 'bg-[#0F2E22] dark:bg-[#1E4D3B] text-white' : 'text-[#555C57] dark:text-[#9DA49F]'}`}
-        >
+      {/* Mobile Nav Drawer */}
+      <div className="lg:hidden flex items-center gap-2 px-4 py-2 overflow-x-auto border-t border-[#E2E8F0] dark:border-[#1E293B] bg-white dark:bg-[#0B1320] text-xs">
+        <a href="#home" className="px-3 py-1 rounded-full bg-[#0066FF] text-white shrink-0">
+          Home
+        </a>
+        <a href="#features-cod" className="px-3 py-1 rounded-full text-[#64748B] shrink-0">
           COD Protection
-        </button>
+        </a>
+        <a href="#how-it-works" className="px-3 py-1 rounded-full text-[#64748B] shrink-0">
+          How it Works
+        </a>
+        <a href="#pricing" className="px-3 py-1 rounded-full text-[#64748B] shrink-0">
+          Pricing
+        </a>
         <button
-          onClick={() => setActiveTab('udhaar')}
-          className={`px-2.5 py-1 rounded-md shrink-0 ${activeTab === 'udhaar' ? 'bg-[#0F2E22] dark:bg-[#1E4D3B] text-white' : 'text-[#555C57] dark:text-[#9DA49F]'}`}
+          onClick={() => onOpenConsole('inbox')}
+          className="px-3 py-1 rounded-full bg-[#EAF2FF] text-[#0066FF] font-bold shrink-0 ml-auto"
         >
-          Udhaar Khata
-        </button>
-        <button
-          onClick={() => setActiveTab('autonomy')}
-          className={`px-2.5 py-1 rounded-md shrink-0 ${activeTab === 'autonomy' ? 'bg-[#0F2E22] dark:bg-[#1E4D3B] text-white' : 'text-[#555C57] dark:text-[#9DA49F]'}`}
-        >
-          Autonomy
-        </button>
-        <button
-          onClick={() => setActiveTab('metrics')}
-          className={`px-2.5 py-1 rounded-md shrink-0 ${activeTab === 'metrics' ? 'bg-[#0F2E22] dark:bg-[#1E4D3B] text-white' : 'text-[#555C57] dark:text-[#9DA49F]'}`}
-        >
-          ROI & Lift
-        </button>
-        <button
-          onClick={() => setActiveTab('comparison')}
-          className={`px-2.5 py-1 rounded-md shrink-0 ${activeTab === 'comparison' ? 'bg-[#0F2E22] dark:bg-[#1E4D3B] text-white' : 'text-[#555C57] dark:text-[#9DA49F]'}`}
-        >
-          Compare
+          Live App ({pendingCount})
         </button>
       </div>
     </header>
