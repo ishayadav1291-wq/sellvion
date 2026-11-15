@@ -8,7 +8,6 @@ import { FaqSection } from './components/FaqSection';
 import { MerchantWorkspace } from './components/workspace/MerchantWorkspace';
 import { AuthModal } from './components/workspace/AuthModal';
 import { AiCopilotModal } from './components/AiCopilotModal';
-import { INITIAL_CUSTOMERS } from './data/mockData';
 import {
   AgentSummary,
   AnalyticsSummaryResponse,
@@ -300,8 +299,7 @@ export default function App() {
   }, [customers, cloudCustomers, firebaseUser]);
 
   const tourCustomers = useMemo<Customer[]>(() => {
-    if (mergedCustomers.length > 0) return mergedCustomers.map(mapRecordToCustomer);
-    return INITIAL_CUSTOMERS;
+    return mergedCustomers.map(mapRecordToCustomer);
   }, [mergedCustomers]);
 
   const effectiveIsAuthenticated = isAuthenticated || Boolean(firebaseUser);
