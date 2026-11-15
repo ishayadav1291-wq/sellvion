@@ -1,26 +1,28 @@
 import React, { useState } from 'react';
-import { Bot, Sparkles, LayoutDashboard, Send, ShieldCheck, Sun, Moon, ChevronDown, ArrowRight, X } from 'lucide-react';
+import { Sun, Moon, ChevronDown, ArrowRight } from 'lucide-react';
+import { ProductTourTab } from './ProductTour';
 
 interface NavbarProps {
   onOpenConsole: (view?: string) => void;
+  onSelectTourTab?: (tab: ProductTourTab) => void;
   pendingCount: number;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
-  onResetData?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   onOpenConsole,
+  onSelectTourTab,
   pendingCount,
   theme,
   onToggleTheme,
-  onResetData,
 }) => {
   const [featuresDropdownOpen, setFeaturesDropdownOpen] = useState(false);
 
-  const scrollToSection = (id: string) => {
+  const jumpToFeature = (tab: ProductTourTab) => {
     setFeaturesDropdownOpen(false);
-    const element = document.getElementById(id);
+    if (onSelectTourTab) onSelectTourTab(tab);
+    const element = document.getElementById('how-it-works');
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
     }
@@ -35,7 +37,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             href="#home"
             className="flex items-center gap-3 text-left focus:outline-none group cursor-pointer"
           >
-            {/* Paytm Logo Image from user attachment */}
             <div className="flex items-center">
               <img
                 src="/assets/aistudio/image_6fa37345.png"
@@ -44,10 +45,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               />
             </div>
 
-            {/* Vertical Divider */}
             <span className="h-6 w-px bg-[#CBD5E1] dark:bg-[#334155]" />
 
-            {/* SELLVION Icon & Wordmark */}
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#6366F1] via-[#0066FF] to-[#00BAF2] text-white flex items-center justify-center font-bold text-sm tracking-wider shadow-sm shadow-[#0066FF]/25">
                 S
@@ -64,7 +63,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </a>
         </div>
 
-        {/* Center: Navigation Links Matching Marketing Screenshot */}
+        {/* Center: Navigation Links */}
         <nav className="hidden lg:flex items-center gap-1.5 text-xs font-semibold text-[#475569] dark:text-[#94A3B8]">
           <a
             href="#home"
@@ -85,51 +84,39 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {featuresDropdownOpen && (
               <div
-                className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-[#132238] rounded-2xl shadow-xl border border-[#BAE6FD] dark:border-[#1E3A5F] p-2 space-y-1 animate-fadeIn z-50 text-xs"
+                className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-[#132238] rounded-2xl shadow-xl border border-[#E2E8F0] dark:border-[#1E3A5F] p-2 space-y-1 z-50 text-xs"
                 onMouseLeave={() => setFeaturesDropdownOpen(false)}
               >
                 <button
-                  onClick={() => scrollToSection('features-cod')}
-                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-[#F0F9FF] dark:hover:bg-[#1A2E4C] text-[#0F172A] dark:text-[#F8FAFC] flex items-center justify-between cursor-pointer"
+                  onClick={() => jumpToFeature('whatsapp')}
+                  className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-[#F0F9FF] dark:hover:bg-[#1A2E4C] text-[#0F172A] dark:text-[#F8FAFC] cursor-pointer"
                 >
-                  <div>
-                    <div className="font-semibold">COD Risk Protection</div>
-                    <div className="text-[10px] text-[#64748B]">Slashes returns from 26% to 11%</div>
-                  </div>
-                  <span className="text-[10px] text-[#DC2626] font-mono">11.8%</span>
+                  <div className="font-semibold">WhatsApp Follow-ups</div>
+                  <div className="text-[11px] text-[#64748B]">Polite Hinglish reorder reminders</div>
                 </button>
 
                 <button
-                  onClick={() => scrollToSection('features-reorder')}
-                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-[#F0F9FF] dark:hover:bg-[#1A2E4C] text-[#0F172A] dark:text-[#F8FAFC] flex items-center justify-between cursor-pointer"
+                  onClick={() => jumpToFeature('cod')}
+                  className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-[#F0F9FF] dark:hover:bg-[#1A2E4C] text-[#0F172A] dark:text-[#F8FAFC] cursor-pointer"
                 >
-                  <div>
-                    <div className="font-semibold">Predictive Reorder Cadence</div>
-                    <div className="text-[10px] text-[#64748B]">Automates repeat purchase prompts</div>
-                  </div>
-                  <span className="text-[10px] text-[#0066FF] font-mono">+22%</span>
+                  <div className="font-semibold">COD Return Protection</div>
+                  <div className="text-[11px] text-[#64748B]">Spot risky orders & convert to UPI</div>
                 </button>
 
                 <button
-                  onClick={() => scrollToSection('features-udhaar')}
-                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-[#F0F9FF] dark:hover:bg-[#1A2E4C] text-[#0F172A] dark:text-[#F8FAFC] flex items-center justify-between cursor-pointer"
+                  onClick={() => jumpToFeature('udhaar')}
+                  className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-[#F0F9FF] dark:hover:bg-[#1A2E4C] text-[#0F172A] dark:text-[#F8FAFC] cursor-pointer"
                 >
-                  <div>
-                    <div className="font-semibold">Udhaar & Bahi-Khata</div>
-                    <div className="text-[10px] text-[#64748B]">Gentle WhatsApp recovery with UPI QR</div>
-                  </div>
-                  <span className="text-[10px] text-[#16A34A] font-mono">UPI</span>
+                  <div className="font-semibold">Udhaar & Collections</div>
+                  <div className="text-[11px] text-[#64748B]">Payment links with 1-tap UPI QR</div>
                 </button>
 
                 <button
-                  onClick={() => scrollToSection('features-autonomy')}
-                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-[#F0F9FF] dark:hover:bg-[#1A2E4C] text-[#0F172A] dark:text-[#F8FAFC] flex items-center justify-between cursor-pointer"
+                  onClick={() => jumpToFeature('calculator')}
+                  className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-[#F0F9FF] dark:hover:bg-[#1A2E4C] text-[#0F172A] dark:text-[#F8FAFC] cursor-pointer"
                 >
-                  <div>
-                    <div className="font-semibold">Earned Autonomy Policy</div>
-                    <div className="text-[10px] text-[#64748B]">Human-in-the-loop owner approval</div>
-                  </div>
-                  <span className="text-[10px] text-[#0066FF] font-mono">FR-016</span>
+                  <div className="font-semibold">Monthly Savings Estimator</div>
+                  <div className="text-[11px] text-[#64748B]">Calculate return & reorder gains</div>
                 </button>
               </div>
             )}
@@ -164,9 +151,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           </a>
         </nav>
 
-        {/* Right: Actions Matching Screenshot */}
+        {/* Right: Actions */}
         <div className="flex items-center gap-2.5 shrink-0">
-          {/* Global Theme Toggle */}
           <button
             onClick={onToggleTheme}
             aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
@@ -176,18 +162,16 @@ export const Navbar: React.FC<NavbarProps> = ({
             {theme === 'light' ? <Moon className="w-4 h-4 text-[#475569]" /> : <Sun className="w-4 h-4 text-[#38BDF8]" />}
           </button>
 
-          {/* Login Button (Launches Merchant Workspace) */}
           <button
             onClick={() => onOpenConsole('inbox')}
             className="px-4 py-2 text-xs font-semibold text-[#0F1E36] dark:text-[#F8FAFC] bg-white dark:bg-[#132238] border border-[#CBD5E1] dark:border-[#1E3A5F] hover:border-[#0066FF] dark:hover:border-[#38BDF8] rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
           >
             <span>Login</span>
             {pendingCount > 0 && (
-              <span className="w-2 h-2 rounded-full bg-[#0066FF] animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-[#0066FF]" />
             )}
           </button>
 
-          {/* Primary CTA */}
           <button
             onClick={() => onOpenConsole('inbox')}
             className="px-4 py-2 text-xs font-bold text-white bg-[#0066FF] hover:bg-[#0052CC] rounded-xl shadow-md shadow-[#0066FF]/25 hover:shadow-lg transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
@@ -198,13 +182,10 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      {/* Mobile Nav Drawer */}
+      {/* Mobile Nav Strip */}
       <div className="lg:hidden flex items-center gap-2 px-4 py-2 overflow-x-auto border-t border-[#E2E8F0] dark:border-[#1E293B] bg-white dark:bg-[#0B1320] text-xs">
         <a href="#home" className="px-3 py-1 rounded-full bg-[#0066FF] text-white shrink-0">
           Home
-        </a>
-        <a href="#features-cod" className="px-3 py-1 rounded-full text-[#64748B] shrink-0">
-          COD Protection
         </a>
         <a href="#how-it-works" className="px-3 py-1 rounded-full text-[#64748B] shrink-0">
           How it Works
@@ -214,9 +195,9 @@ export const Navbar: React.FC<NavbarProps> = ({
         </a>
         <button
           onClick={() => onOpenConsole('inbox')}
-          className="px-3 py-1 rounded-full bg-[#EAF2FF] text-[#0066FF] font-bold shrink-0 ml-auto"
+          className="px-3 py-1 rounded-full bg-[#EAF2FF] text-[#0066FF] font-bold shrink-0 ml-auto cursor-pointer"
         >
-          Live App ({pendingCount})
+          Workspace ({pendingCount})
         </button>
       </div>
     </header>

@@ -53,9 +53,9 @@ export const AutonomySettings: React.FC<AutonomySettingsProps> = ({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs text-[#64748B] dark:text-[#94A3B8] mb-1">
-            <span>Safety & Governance</span>
+            <span>Safety & Permissions</span>
             <span>·</span>
-            <span className="font-semibold text-[#0284C7] dark:text-[#38BDF8]">FR-016 & FR-017 Policy Engine</span>
+            <span className="font-semibold text-[#0284C7] dark:text-[#38BDF8]">Store Guardrails</span>
           </div>
           <h2 className="text-2xl font-bold tracking-tight text-[#0F172A] dark:text-[#F8FAFC]">
             Earned Autonomy Controls

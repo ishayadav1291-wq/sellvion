@@ -527,8 +527,8 @@ export const ApprovalInbox: React.FC<ApprovalInboxProps> = ({
               <div className="flex items-center justify-between text-xs text-[#64748B] dark:text-[#94A3B8]">
                 <span>WhatsApp Body Preview</span>
                 {isGeneratingTone && (
-                  <span className="text-[#0284C7] dark:text-[#38BDF8] flex items-center gap-1 font-mono text-[10px]">
-                    <RefreshCw className="w-3 h-3 animate-spin" /> Generating with Gemini...
+                  <span className="text-[#0284C7] dark:text-[#38BDF8] flex items-center gap-1 text-[11px] font-medium">
+                    <RefreshCw className="w-3 h-3 animate-spin" /> Rewriting draft...
                   </span>
                 )}
               </div>

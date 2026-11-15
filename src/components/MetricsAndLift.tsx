@@ -45,7 +45,7 @@ export const MetricsAndLift: React.FC<MetricsAndLiftProps> = ({ metrics }) => {
         <div className="flex items-center gap-2 text-xs text-[#64748B] dark:text-[#94A3B8] mb-1">
           <span>Incremental Revenue & Lift Science</span>
           <span>·</span>
-          <span className="font-semibold text-[#0284C7] dark:text-[#38BDF8]">BR-08 & BRULE-06 Control-Group Standard</span>
+          <span className="font-semibold text-[#0284C7] dark:text-[#38BDF8]">10% Holdout Comparison</span>
         </div>
         <h2 className="text-2xl font-bold tracking-tight text-[#0F172A] dark:text-[#F8FAFC]">
           Measurable Business Impact
@@ -150,7 +150,7 @@ export const MetricsAndLift: React.FC<MetricsAndLiftProps> = ({ metrics }) => {
               Incremental Lift: AI Engaged Cohort vs Uncontacted Holdout
             </h3>
             <p className="text-xs text-[#64748B] dark:text-[#94A3B8] mt-0.5">
-              Strictly verifies true incremental purchase causality (BRULE-06 compliant).
+              Compares buyers who received reminders against a 10% uncontacted control group.
             </p>
           </div>
 
@@ -341,7 +341,7 @@ export const MetricsAndLift: React.FC<MetricsAndLiftProps> = ({ metrics }) => {
 
               <div>
                 <span className="font-semibold text-[#475569] dark:text-[#CBD5E1] block mb-1">
-                  BRULE-06 Calculation Formula:
+                  How It Is Calculated:
                 </span>
                 <div className="p-2.5 bg-[#F8FAFC] dark:bg-[#0F1A2C] rounded-lg border border-[#E2E8F0] dark:border-[#1E3A5F] font-mono text-[11px] text-[#0F172A] dark:text-[#F8FAFC] leading-relaxed">
                   {activeModalMetric.formula}

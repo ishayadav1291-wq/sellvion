@@ -44,12 +44,12 @@ export const PartnersSection: React.FC = () => {
       color: '#3395FF',
     },
     {
-      name: 'Google Gemini 2.5',
-      tag: 'AI Foundation',
-      description: 'Ultra-fast low-latency multi-agent reasoning, Hinglish copywriting, and risk scoring.',
-      badge: 'Core Intelligence',
+      name: 'Tally & Zoho Books',
+      tag: 'GST & Accounting Sync',
+      description: 'Auto-reconciles collected udhaar payments and prepaid conversions directly with your books.',
+      badge: '1-Click Export',
       isImage: false,
-      color: '#8B5CF6',
+      color: '#F59E0B',
     },
   ];
 
