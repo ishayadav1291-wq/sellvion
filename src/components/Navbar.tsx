@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Sun, Moon, ChevronDown, ArrowRight } from 'lucide-react';
 import { ProductTourTab } from './ProductTour';
 import { ConsoleTabId } from '../types';
+import { useFirebase } from '../context/FirebaseProvider';
 
 interface NavbarProps {
   onOpenConsole: (view?: ConsoleTabId) => void;
@@ -21,6 +22,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleTheme,
 }) => {
   const [featuresDropdownOpen, setFeaturesDropdownOpen] = useState(false);
+  const { user: firebaseUser } = useFirebase();
 
   const jumpToFeature = (tab: ProductTourTab) => {
     setFeaturesDropdownOpen(false);
@@ -174,10 +176,20 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
 
           <button
-            onClick={() => (onOpenAuth ? onOpenAuth('login') : onOpenConsole('inbox'))}
+            onClick={() =>
+              firebaseUser
+                ? onOpenConsole('dashboard')
+                : onOpenAuth
+                ? onOpenAuth('login')
+                : onOpenConsole('inbox')
+            }
             className="px-4 py-2 text-xs font-semibold text-[#0F1E36] dark:text-[#F8FAFC] bg-white dark:bg-[#132238] border border-[#CBD5E1] dark:border-[#1E3A5F] hover:border-[#0066FF] dark:hover:border-[#38BDF8] rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
           >
-            <span>Login</span>
+            <span>
+              {firebaseUser
+                ? firebaseUser.displayName?.split(' ')[0] || 'Account'
+                : 'Login'}
+            </span>
             {pendingCount > 0 && (
               <span className="w-2 h-2 rounded-full bg-[#0066FF]" />
             )}

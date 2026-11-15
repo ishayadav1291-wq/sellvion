@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, LogIn, UserPlus, KeyRound, ArrowRight } from 'lucide-react';
 import { AppLanguage } from '../../types';
 import { apiRequest, setModeHeader, setStoredToken } from '../../lib/api';
+import { useFirebase } from '../../context/FirebaseProvider';
 import { tr } from '../../i18n/translations';
 
 interface AuthModalProps {
@@ -34,6 +35,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [resetStep, setResetStep] = useState<'request' | 'confirm'>('request');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { signInWithGoogle } = useFirebase();
 
   useEffect(() => {
     setView(initialMode);
@@ -49,6 +51,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
+
+  const handleGoogleAuth = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const fbUser = await signInWithGoogle();
+      onNotify(
+        tr(
+          language,
+          `Signed in with Google (${fbUser.displayName || fbUser.email || 'Merchant'}).`,
+          `Google के साथ साइन इन हो गया (${fbUser.displayName || fbUser.email || 'व्यापारी'})।`
+        )
+      );
+      onAuthenticated();
+      onClose();
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : tr(language, 'Google sign-in failed.', 'Google साइन इन विफल रहा।')
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -221,6 +248,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {error && (
             <div className="p-3 rounded-xl bg-[#FEE2E2] dark:bg-[#450A0A] text-xs font-semibold text-[#DC2626] dark:text-[#FCA5A5]">
               {error}
+            </div>
+          )}
+
+          {view !== 'forgot' && (
+            <div className="space-y-3">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={handleGoogleAuth}
+                className="w-full h-10 rounded-xl border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#061533] hover:border-[#2563EB] text-xs font-bold text-[#071A35] dark:text-white flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 transition-colors"
+              >
+                <span className="w-4 h-4 rounded-full bg-[#2563EB] text-white text-[10px] font-extrabold flex items-center justify-center">
+                  G
+                </span>
+                <span>
+                  {tr(language, 'Continue with Google', 'Google से जारी रखें')}
+                </span>
+              </button>
+              <div className="flex items-center gap-2 text-[11px] text-[#64748B]">
+                <span className="flex-1 h-px bg-[#E2E8F0] dark:bg-[#1E3A5F]" />
+                <span>{tr(language, 'or with store credentials', 'या ईमेल से जारी रखें')}</span>
+                <span className="flex-1 h-px bg-[#E2E8F0] dark:bg-[#1E3A5F]" />
+              </div>
             </div>
           )}
 

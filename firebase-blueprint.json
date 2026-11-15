@@ -1,0 +1,438 @@
+{
+  "entities": {
+    "UserPublicProfile": {
+      "title": "UserPublicProfile",
+      "description": "Non-PII display profile for an authenticated SELLVION merchant.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Authentication UID."
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Merchant display name."
+        },
+        "photoUrl": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Optional avatar URL."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": ["uid", "displayName", "createdAt", "updatedAt"]
+    },
+    "UserPrivateInfo": {
+      "title": "UserPrivateInfo",
+      "description": "Owner-only PII record for an authenticated SELLVION merchant.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Authentication UID."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 3,
+          "maxLength": 180,
+          "description": "Verified merchant email address."
+        },
+        "activeWorkspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Primary merchant workspace ID."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": ["uid", "email", "createdAt", "updatedAt"]
+    },
+    "MerchantWorkspace": {
+      "title": "MerchantWorkspace",
+      "description": "Persistent SELLVION store profile and earned autonomy guardrail policy.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Workspace identifier."
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Owner Firebase Auth UID."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 140,
+          "description": "Merchant store name."
+        },
+        "category": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Business category."
+        },
+        "city": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Store city."
+        },
+        "state": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Store state."
+        },
+        "storeUrl": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Store website or storefront URL."
+        },
+        "preferredLanguage": {
+          "type": "string",
+          "enum": ["en", "hi"],
+          "description": "Preferred UI and communication language."
+        },
+        "emergencyPauseAll": {
+          "type": "boolean",
+          "description": "Emergency pause state blocking all automation."
+        },
+        "reorderReminders": {
+          "type": "string",
+          "enum": ["recommendation_only", "approval_required", "bounded_autonomous"],
+          "description": "Autonomy policy for reorder reminders."
+        },
+        "codPrepayNudges": {
+          "type": "string",
+          "enum": ["recommendation_only", "approval_required", "bounded_autonomous"],
+          "description": "Autonomy policy for COD verification and prepay nudges."
+        },
+        "udhaarReminders": {
+          "type": "string",
+          "enum": ["recommendation_only", "approval_required", "bounded_autonomous"],
+          "description": "Autonomy policy for udhaar reminders."
+        },
+        "winbackOffers": {
+          "type": "string",
+          "enum": ["recommendation_only", "approval_required", "bounded_autonomous"],
+          "description": "Autonomy policy for win-back offers."
+        },
+        "maxDailyMessagesPerCustomer": {
+          "type": "integer",
+          "description": "Daily customer frequency cap."
+        },
+        "quietHoursStart": {
+          "type": "string",
+          "maxLength": 10,
+          "pattern": "^[0-9]{2}:[0-9]{2}$",
+          "description": "IST quiet window start time (HH:MM)."
+        },
+        "quietHoursEnd": {
+          "type": "string",
+          "maxLength": 10,
+          "pattern": "^[0-9]{2}:[0-9]{2}$",
+          "description": "IST quiet window end time (HH:MM)."
+        },
+        "minConfidenceForAutonomous": {
+          "type": "integer",
+          "description": "Minimum AI confidence required for bounded autonomy."
+        },
+        "maxAutonomousDiscountPct": {
+          "type": "integer",
+          "description": "Maximum allowed autonomous discount percentage."
+        },
+        "dailySpendCapInr": {
+          "type": "number",
+          "description": "Daily incentive spend cap in INR."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "id",
+        "ownerId",
+        "name",
+        "preferredLanguage",
+        "emergencyPauseAll",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CustomerProfile": {
+      "title": "CustomerProfile",
+      "description": "Synced Customer 360 record owned by a merchant workspace.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Customer document ID."
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Parent workspace ID."
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Owner Firebase Auth UID."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Customer full name."
+        },
+        "phone": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Customer WhatsApp phone number."
+        },
+        "city": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Customer city."
+        },
+        "lastProductOrdered": {
+          "type": "string",
+          "maxLength": 140,
+          "description": "Most recent product ordered."
+        },
+        "segment": {
+          "type": "string",
+          "enum": [
+            "regular",
+            "loyal",
+            "reorder_due",
+            "at_risk",
+            "inactive",
+            "high_udhaar",
+            "first_time"
+          ],
+          "description": "Customer segment classification."
+        },
+        "totalOrders": {
+          "type": "integer",
+          "description": "Total completed order count."
+        },
+        "totalSpent": {
+          "type": "number",
+          "description": "Cumulative customer spend in INR."
+        },
+        "outstandingUdhaar": {
+          "type": "number",
+          "description": "Pending udhaar balance in INR."
+        },
+        "optedOut": {
+          "type": "boolean",
+          "description": "Whether customer opted out of WhatsApp outreach."
+        },
+        "aiInsight": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Customer intelligence summary."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "id",
+        "workspaceId",
+        "ownerId",
+        "name",
+        "segment",
+        "optedOut",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "DraftRevision": {
+      "title": "DraftRevision",
+      "description": "WhatsApp draft edit and decision history log entry.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Draft revision identifier."
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Parent workspace ID."
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Owner Firebase Auth UID."
+        },
+        "approvalId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Associated approval queue item ID."
+        },
+        "customerName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Customer display name."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "description": "Draft action title."
+        },
+        "agentName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "AI teammate that prepared the draft."
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "description": "WhatsApp draft message body."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["edited", "approved", "rejected", "scheduled"],
+          "description": "Lifecycle decision status for this draft revision."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "id",
+        "workspaceId",
+        "ownerId",
+        "approvalId",
+        "customerName",
+        "title",
+        "agentName",
+        "message",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Explicit database role record granting platform admin privileges.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Admin Firebase Auth UID."
+        },
+        "grantedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when admin access was granted."
+        }
+      },
+      "required": ["uid", "grantedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/public/{docId}": {
+      "schema": { "$ref": "#/entities/UserPublicProfile" },
+      "description": "Non-PII merchant profile document."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserPrivateInfo" },
+      "description": "Owner-restricted PII profile document."
+    },
+    "/workspaces/{workspaceId}": {
+      "schema": { "$ref": "#/entities/MerchantWorkspace" },
+      "description": "Merchant store metadata and earned autonomy guardrail settings."
+    },
+    "/workspaces/{workspaceId}/customers/{customerId}": {
+      "schema": { "$ref": "#/entities/CustomerProfile" },
+      "description": "Customer 360 profile snapshot synced for the merchant workspace."
+    },
+    "/workspaces/{workspaceId}/draftRevisions/{revisionId}": {
+      "schema": { "$ref": "#/entities/DraftRevision" },
+      "description": "Persistent Draft History and decision audit entries."
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Database-backed admin role lookup collection."
+    }
+  }
+}

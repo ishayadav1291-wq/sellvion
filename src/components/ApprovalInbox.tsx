@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { AppLanguage, AppMode, ApprovalRecord } from '../types';
 import { apiRequest } from '../lib/api';
+import { useFirebase } from '../context/FirebaseProvider';
 import { localizeAgentName, tr } from '../i18n/translations';
 
 interface ApprovalInboxProps {
@@ -74,6 +75,7 @@ export const ApprovalInbox: React.FC<ApprovalInboxProps> = ({
       status: 'edited' | 'approved' | 'rejected' | 'scheduled';
     }>
   >([]);
+  const { user: firebaseUser, cloudDraftRevisions, syncDraftRevision } = useFirebase();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -134,6 +136,26 @@ export const ApprovalInbox: React.FC<ApprovalInboxProps> = ({
         method: 'POST',
         body: JSON.stringify({ decision, scheduledFor }),
       });
+      if (res.ok !== false && (decision === 'approve' || decision === 'reject' || decision === 'schedule')) {
+        const target = approvals.find((a) => a.id === id);
+        if (target && firebaseUser) {
+          const revStatus =
+            decision === 'approve'
+              ? 'approved'
+              : decision === 'reject'
+              ? 'rejected'
+              : 'scheduled';
+          await syncDraftRevision({
+            id: `REV_${Date.now()}`,
+            approvalId: target.id,
+            customerName: target.customer_name,
+            title: target.title,
+            agentName: target.agent_name,
+            message: target.suggested_message,
+            status: revStatus,
+          });
+        }
+      }
       onNotify(res.message);
       setConfirmApprove(null);
       setScheduleTarget(null);
@@ -160,18 +182,28 @@ export const ApprovalInbox: React.FC<ApprovalInboxProps> = ({
         body: JSON.stringify({ suggestedMessage: draftText }),
       });
       if (targetAct) {
-        setDraftRevisions((prev) => [
-          {
-            id: `REV-${Date.now()}`,
+        const revId = `REV_${Date.now()}`;
+        const revEntry = {
+          id: revId,
+          customerName: targetAct.customer_name,
+          title: targetAct.title,
+          agentName: targetAct.agent_name,
+          message: draftText,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          status: 'edited' as const,
+        };
+        setDraftRevisions((prev) => [revEntry, ...prev]);
+        if (firebaseUser) {
+          await syncDraftRevision({
+            id: revId,
+            approvalId: targetAct.id,
             customerName: targetAct.customer_name,
             title: targetAct.title,
             agentName: targetAct.agent_name,
             message: draftText,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             status: 'edited',
-          },
-          ...prev,
-        ]);
+          });
+        }
       }
       setEditingId(null);
       onNotify(tr(language, 'Draft message updated.', 'ड्राफ़्ट संदेश अपडेट हो गया।'));
@@ -355,7 +387,10 @@ export const ApprovalInbox: React.FC<ApprovalInboxProps> = ({
               {
                 id: 'history',
                 label: `${tr(language, 'Draft History', 'ड्राफ्ट इतिहास')} (${
-                  draftRevisions.length + completedList.length + failedEscalatedList.length + scheduledList.length
+                  new Set([...draftRevisions.map((r) => r.id), ...cloudDraftRevisions.map((r) => r.id)]).size +
+                  completedList.length +
+                  failedEscalatedList.length +
+                  scheduledList.length
                 })`,
               },
             ] as const
@@ -397,11 +432,14 @@ export const ApprovalInbox: React.FC<ApprovalInboxProps> = ({
               {tr(language, 'Draft History & Decision Log', 'ड्राफ्ट इतिहास और निर्णय लॉग')}
             </span>
             <span className="text-[#64748B] dark:text-[#94A3B8] tabular-nums">
-              {draftRevisions.length + completedList.length + failedEscalatedList.length + scheduledList.length}{' '}
+              {new Set([...draftRevisions.map((r) => r.id), ...cloudDraftRevisions.map((r) => r.id)]).size +
+                completedList.length +
+                failedEscalatedList.length +
+                scheduledList.length}{' '}
               {tr(language, 'entries', 'प्रविष्टियाँ')}
             </span>
           </div>
-          {draftRevisions.length + completedList.length + failedEscalatedList.length + scheduledList.length === 0 ? (
+          {draftRevisions.length + cloudDraftRevisions.length + completedList.length + failedEscalatedList.length + scheduledList.length === 0 ? (
             <div className="p-8 text-center text-xs text-[#64748B] dark:text-[#94A3B8]">
               {tr(
                 language,
@@ -411,14 +449,21 @@ export const ApprovalInbox: React.FC<ApprovalInboxProps> = ({
             </div>
           ) : (
             <div className="divide-y divide-[#E2E8F0] dark:divide-[#1E3A5F]">
-              {draftRevisions.map((rev) => (
+              {[...draftRevisions, ...cloudDraftRevisions.filter((c) => !draftRevisions.some((l) => l.id === c.id))].map((rev) => (
                 <div key={rev.id} className="p-4 space-y-1.5 text-xs">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="font-bold text-[#071A35] dark:text-white">
                       {rev.customerName} · <span className="text-[#64748B] font-normal">{rev.title}</span>
                     </div>
                     <span className="px-2 py-0.5 rounded bg-[#EFF6FF] dark:bg-[#0C2E4E] text-[#2563EB] dark:text-[#22D3EE] font-bold">
-                      {tr(language, 'Edited Draft', 'संपादित ड्राफ्ट')} · {rev.timestamp}
+                      {rev.status === 'edited'
+                        ? tr(language, 'Edited Draft', 'संपादित ड्राफ्ट')
+                        : rev.status === 'approved'
+                        ? tr(language, 'Approved Draft', 'मंज़ूर ड्राफ्ट')
+                        : rev.status === 'rejected'
+                        ? tr(language, 'Rejected Draft', 'अस्वीकृत ड्राफ्ट')
+                        : tr(language, 'Scheduled Draft', 'शेड्यूल ड्राफ्ट')}
+                      {rev.timestamp ? ` · ${rev.timestamp}` : ''}
                     </span>
                   </div>
                   <p className="p-2.5 rounded-lg bg-[#F8FAFC] dark:bg-[#061533] text-[#334155] dark:text-[#CBD5E1]">

@@ -28,6 +28,7 @@ import {
   WorkflowRecord,
 } from './types';
 import { apiRequest, setModeHeader, setStoredToken } from './lib/api';
+import { useFirebase } from './context/FirebaseProvider';
 import { tr } from './i18n/translations';
 import { Sparkles, Check, ArrowRight, RotateCcw } from 'lucide-react';
 
@@ -131,6 +132,7 @@ export default function App() {
   const [analytics, setAnalytics] = useState<AnalyticsSummaryResponse | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
   const [autonomyConfig, setAutonomyConfig] = useState<AutonomyPolicyConfig>(DEFAULT_AUTONOMY);
+  const { user: firebaseUser, cloudWorkspace, cloudCustomers, signOutFirebase } = useFirebase();
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -203,6 +205,40 @@ export default function App() {
     refreshWorkspace();
   }, [refreshWorkspace]);
 
+  useEffect(() => {
+    if (!firebaseUser || !cloudWorkspace) return;
+    if (cloudWorkspace.name) setBusinessName(cloudWorkspace.name);
+    setBusinessInfo((prev) => ({
+      id: cloudWorkspace.id,
+      name: cloudWorkspace.name,
+      category: cloudWorkspace.category || prev?.category || 'Retail & D2C',
+      city: cloudWorkspace.city || prev?.city || '',
+      state: cloudWorkspace.state || prev?.state || '',
+      currency: prev?.currency || 'INR',
+      timezone: prev?.timezone || 'Asia/Kolkata',
+      preferred_language: cloudWorkspace.preferredLanguage || prev?.preferred_language || 'en',
+      store_url: cloudWorkspace.storeUrl || prev?.store_url || '',
+      mode: prev?.mode || 'live',
+    }));
+    setAutonomyConfig((prev) => ({
+      ...prev,
+      emergencyPauseAll: cloudWorkspace.emergencyPauseAll ?? prev.emergencyPauseAll,
+      reorderReminders: cloudWorkspace.reorderReminders || prev.reorderReminders,
+      codPrepayNudges: cloudWorkspace.codPrepayNudges || prev.codPrepayNudges,
+      udhaarReminders: cloudWorkspace.udhaarReminders || prev.udhaarReminders,
+      winbackOffers: cloudWorkspace.winbackOffers || prev.winbackOffers,
+      maxDailyMessagesPerCustomer:
+        cloudWorkspace.maxDailyMessagesPerCustomer ?? prev.maxDailyMessagesPerCustomer,
+      quietHoursStart: cloudWorkspace.quietHoursStart || prev.quietHoursStart,
+      quietHoursEnd: cloudWorkspace.quietHoursEnd || prev.quietHoursEnd,
+      minConfidenceForAutonomous:
+        cloudWorkspace.minConfidenceForAutonomous ?? prev.minConfidenceForAutonomous,
+      maxAutonomousDiscountPct:
+        cloudWorkspace.maxAutonomousDiscountPct ?? prev.maxAutonomousDiscountPct,
+      dailySpendCapInr: cloudWorkspace.dailySpendCapInr ?? prev.dailySpendCapInr,
+    }));
+  }, [firebaseUser, cloudWorkspace]);
+
   const openConsoleWithTab = (tab: ConsoleTabId = 'agents') => {
     setConsoleTab(tab);
     setIsConsoleOpen(true);
@@ -232,6 +268,11 @@ export default function App() {
     } catch {
       // ignore
     }
+    try {
+      if (firebaseUser) await signOutFirebase();
+    } catch {
+      // ignore
+    }
     setStoredToken(null);
     setModeHeader('demo');
     await refreshWorkspace();
@@ -247,11 +288,23 @@ export default function App() {
     showToast(`${actionType} simulated for ${customerName}`);
   };
 
-  const tourCustomers = useMemo<Customer[]>(() => {
-    if (customers.length > 0) return customers.map(mapRecordToCustomer);
-    return INITIAL_CUSTOMERS;
-  }, [customers]);
+  const mergedCustomers = useMemo<CustomerRecord[]>(() => {
+    if (!firebaseUser || cloudCustomers.length === 0) return customers;
+    const byId = new Map<string, CustomerRecord>();
+    for (const c of customers) byId.set(c.id, c);
+    for (const cc of cloudCustomers) {
+      if (!byId.has(cc.id)) byId.set(cc.id, cc);
+      else byId.set(cc.id, { ...byId.get(cc.id)!, opted_out: cc.opted_out, consent_whatsapp: cc.consent_whatsapp });
+    }
+    return Array.from(byId.values());
+  }, [customers, cloudCustomers, firebaseUser]);
 
+  const tourCustomers = useMemo<Customer[]>(() => {
+    if (mergedCustomers.length > 0) return mergedCustomers.map(mapRecordToCustomer);
+    return INITIAL_CUSTOMERS;
+  }, [mergedCustomers]);
+
+  const effectiveIsAuthenticated = isAuthenticated || Boolean(firebaseUser);
   const pendingCount = approvals.filter((a) => a.status === 'pending_approval').length;
 
   return (
@@ -462,12 +515,12 @@ export default function App() {
         onChangeTab={setConsoleTab}
         onClose={() => setIsConsoleOpen(false)}
         appMode={appMode}
-        isAuthenticated={isAuthenticated}
+        isAuthenticated={effectiveIsAuthenticated}
         businessName={businessName}
         businessInfo={businessInfo}
         language={language}
         onChangeLanguage={setLanguage}
-        customers={customers}
+        customers={mergedCustomers}
         orders={orders}
         udhaarRecords={udhaarRecords}
         payments={payments}

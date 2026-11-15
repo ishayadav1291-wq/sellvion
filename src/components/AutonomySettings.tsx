@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ShieldCheck, PauseOctagon, Save } from 'lucide-react';
 import { AppLanguage, AutonomyLevel, AutonomyPolicyConfig } from '../types';
 import { apiRequest } from '../lib/api';
+import { useFirebase } from '../context/FirebaseProvider';
 import { tr } from '../i18n/translations';
 
 interface AutonomySettingsProps {
@@ -19,6 +20,7 @@ export const AutonomySettings: React.FC<AutonomySettingsProps> = ({
 }) => {
   const [form, setForm] = useState<AutonomyPolicyConfig>(config);
   const [saving, setSaving] = useState(false);
+  const { user: firebaseUser, syncAutonomyPolicy } = useFirebase();
 
   useEffect(() => {
     setForm(config);
@@ -32,6 +34,9 @@ export const AutonomySettings: React.FC<AutonomySettingsProps> = ({
         method: 'PUT',
         body: JSON.stringify(payload),
       });
+      if (firebaseUser) {
+        await syncAutonomyPolicy(payload);
+      }
       onSaved(payload);
       onNotify(
         payload.emergencyPauseAll

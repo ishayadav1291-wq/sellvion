@@ -27,6 +27,7 @@ import {
   CustomerTimelineEvent,
 } from '../types';
 import { apiRequest } from '../lib/api';
+import { useFirebase } from '../context/FirebaseProvider';
 import { localizeWorkflowStatus, tr } from '../i18n/translations';
 
 interface Customer360Props {
@@ -165,6 +166,7 @@ export const Customer360: React.FC<Customer360Props> = ({
   const [orderItemName, setOrderItemName] = useState('');
   const [orderAmount, setOrderAmount] = useState(1150);
   const [recordingOrder, setRecordingOrder] = useState(false);
+  const { user: firebaseUser, syncCustomer, syncCustomerOptOut } = useFirebase();
 
   const openCustomerDrawer = async (customerId: string) => {
     setLoadingDrawer(true);
@@ -239,6 +241,22 @@ export const Customer360: React.FC<Customer360Props> = ({
         method: 'PATCH',
         body: JSON.stringify({ optedOut: nextOptOut, consentWhatsApp: !nextOptOut }),
       });
+      if (firebaseUser) {
+        await syncCustomer({
+          id: customer.id,
+          name: customer.name,
+          phone: customer.phone,
+          city: customer.city,
+          lastProductOrdered: customer.last_product_ordered,
+          segment: customer.segment,
+          totalOrders: customer.total_orders,
+          totalSpent: customer.total_spent,
+          outstandingUdhaar: customer.outstanding_udhaar,
+          optedOut: nextOptOut,
+          aiInsight: customer.ai_insight,
+        });
+        await syncCustomerOptOut(customer.id, nextOptOut);
+      }
       onNotify(
         nextOptOut
           ? tr(
@@ -318,7 +336,7 @@ export const Customer360: React.FC<Customer360Props> = ({
     e.preventDefault();
     setSubmitting(true);
     try {
-      await apiRequest('/api/customers', {
+      const created = await apiRequest<{ customer?: CustomerRecord }>('/api/customers', {
         method: 'POST',
         body: JSON.stringify({
           name: newName,
@@ -329,6 +347,21 @@ export const Customer360: React.FC<Customer360Props> = ({
           outstandingUdhaar: newUdhaar,
         }),
       });
+      if (firebaseUser) {
+        await syncCustomer({
+          id: created.customer?.id || `CUST_${Date.now()}`,
+          name: newName,
+          phone: newPhone,
+          city: newCity,
+          lastProductOrdered: newProduct,
+          segment: Number(newUdhaar) > 0 ? 'high_udhaar' : 'first_time',
+          totalOrders: 0,
+          totalSpent: 0,
+          outstandingUdhaar: Number(newUdhaar || 0),
+          optedOut: false,
+          aiInsight: 'Added in Customer 360',
+        });
+      }
       setAddModalOpen(false);
       setNewName('');
       setNewPhone('');

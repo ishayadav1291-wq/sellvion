@@ -43,6 +43,7 @@ import {
 } from '../../types';
 import { localizeActorType, localizeAuditAction, t, tr } from '../../i18n/translations';
 import { apiRequest } from '../../lib/api';
+import { useFirebase } from '../../context/FirebaseProvider';
 import { MerchantDashboard } from './MerchantDashboard';
 import { ApprovalInbox } from '../ApprovalInbox';
 import { Customer360 } from '../Customer360';
@@ -133,6 +134,7 @@ export const MerchantWorkspace: React.FC<MerchantWorkspaceProps> = ({
   const [profileState, setProfileState] = useState(businessInfo?.state || '');
   const [profileUrl, setProfileUrl] = useState(businessInfo?.store_url || '');
   const [savingProfile, setSavingProfile] = useState(false);
+  const { user: firebaseUser, syncWorkspaceProfile } = useFirebase();
 
   useEffect(() => {
     setProfileName(businessInfo?.name || businessName);
@@ -280,16 +282,30 @@ export const MerchantWorkspace: React.FC<MerchantWorkspaceProps> = ({
     }
     setSavingProfile(true);
     try {
-      await apiRequest('/api/business/profile', {
-        method: 'PATCH',
-        body: JSON.stringify({
+      if (firebaseUser) {
+        await syncWorkspaceProfile({
           name: profileName,
           category: profileCategory,
           city: profileCity,
           state: profileState,
           storeUrl: profileUrl,
-        }),
-      });
+          preferredLanguage: language,
+        });
+      }
+      try {
+        await apiRequest('/api/business/profile', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            name: profileName,
+            category: profileCategory,
+            city: profileCity,
+            state: profileState,
+            storeUrl: profileUrl,
+          }),
+        });
+      } catch (apiErr) {
+        if (!firebaseUser) throw apiErr;
+      }
       onNotify(tr(language, 'Store profile saved.', 'दुकान प्रोफ़ाइल सहेजी गई।'));
       onRefreshAll();
     } catch (err: unknown) {
