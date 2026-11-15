@@ -1,220 +1,164 @@
-import React, { useState } from 'react';
-import { Sparkles, X, Send, Bot, User, RefreshCw } from 'lucide-react';
-import { Customer, MetricSummary } from '../types';
+import React, { useState, useEffect } from 'react';
+import { X, Send, Sparkles, RefreshCw } from 'lucide-react';
+import { AppLanguage } from '../types';
+import { apiRequest } from '../lib/api';
+import { tr } from '../i18n/translations';
 
 interface AiCopilotModalProps {
   isOpen: boolean;
   onClose: () => void;
-  customers: Customer[];
-  metrics: MetricSummary;
-}
-
-interface Message {
-  sender: 'user' | 'assistant';
-  text: string;
-  timestamp: string;
+  language: AppLanguage;
 }
 
 export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
   isOpen,
   onClose,
-  customers,
-  metrics,
+  language,
 }) => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      sender: 'assistant',
-      text: 'Namaste! I am your SELLVION AI Employee copilot. I analyze your customer buying rhythms, track overdue udhaar, and evaluate COD return risks. How can I help your store today?',
-      timestamp: 'Just now',
-    },
-  ]);
-  const [inputText, setInputText] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [query, setQuery] = useState('');
+  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setMessages((prev) => {
+      if (prev.length <= 1 && (prev.length === 0 || prev[0].role === 'assistant')) {
+        return [
+          {
+            role: 'assistant',
+            text: tr(
+              language,
+              'Ask me about customers due for reorder, flagged COD orders, or pending udhaar balances in your store.',
+              'अपने स्टोर में रीऑर्डर के लिए तैयार ग्राहकों, जोखिम वाले COD ऑर्डर या बकाया उधार के बारे में पूछें।'
+            ),
+          },
+        ];
+      }
+      return prev;
+    });
+  }, [language]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
-  const quickPrompts = [
-    'Which regular customers are due for reorder this week?',
-    'Why is order ORD-9932 flagged for 68% COD return risk?',
-    'How much udhaar is currently overdue past 5 days?',
-    'Suggest a festival offer for our inactive VIP customers',
-  ];
+  const handleAsk = async (qText?: string) => {
+    const prompt = (qText ?? query).trim();
+    if (!prompt || loading) return;
 
-  const handleSendMessage = async (queryText?: string) => {
-    const textToSend = queryText || inputText;
-    if (!textToSend.trim() || isLoading) return;
-
-    const userMsg: Message = {
-      sender: 'user',
-      text: textToSend,
-      timestamp: 'Just now',
-    };
-
-    setMessages((prev) => [...prev, userMsg]);
-    setInputText('');
-    setIsLoading(true);
+    setMessages((prev) => [...prev, { role: 'user', text: prompt }]);
+    if (!qText) setQuery('');
+    setLoading(true);
 
     try {
-      const res = await fetch('/api/ai/ask-copilot', {
+      const res = await apiRequest<{ reply: string }>('/api/ai/ask-copilot', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: textToSend,
-          merchantContext: {
-            activeCustomersCount: customers.length,
-            dueForReorder: customers.filter((c) => c.segment === 'reorder_due').map((c) => ({
-              name: c.name,
-              item: c.lastProductOrdered,
-              cadence: c.averageOrderCadenceDays,
-              daysSince: c.daysSinceLastOrder,
-            })),
-            highCodRisk: customers.filter((c) => c.codReliabilityScore < 50).map((c) => ({
-              name: c.name,
-              score: c.codReliabilityScore,
-              city: c.city,
-            })),
-            overdueUdhaar: customers.filter((c) => c.outstandingUdhaar > 0).map((c) => ({
-              name: c.name,
-              amount: c.outstandingUdhaar,
-              dueDate: c.udhaarDueDate,
-            })),
-            metrics,
-          },
-        }),
+        body: JSON.stringify({ query: prompt, language }),
       });
-
-      const data = await res.json();
-      const reply = data.reply || 'Analysis completed based on current customer ledger records.';
-
+      setMessages((prev) => [...prev, { role: 'assistant', text: res.reply }]);
+    } catch {
       setMessages((prev) => [
         ...prev,
         {
-          sender: 'assistant',
-          text: reply,
-          timestamp: 'Just now',
-        },
-      ]);
-    } catch (err) {
-      console.error('Copilot request failed:', err);
-      setMessages((prev) => [
-        ...prev,
-        {
-          sender: 'assistant',
-          text: 'Unable to reach the AI model right now. You have 2 customers due for reorder and ₹5,300 in pending udhaar.',
-          timestamp: 'Just now',
+          role: 'assistant',
+          text: tr(
+            language,
+            'Could not reach the store assistant right now. Please try again.',
+            'अभी स्टोर सहायक से संपर्क नहीं हो सका। कृपया पुनः प्रयास करें।'
+          ),
         },
       ]);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-      <div className="bg-[#F8FAFC] dark:bg-[#0B1320] rounded-2xl max-w-xl w-full h-[620px] shadow-2xl border border-[#CBD5E1] dark:border-[#1E3A5F] flex flex-col overflow-hidden transition-colors">
-        {/* Header */}
-        <div className="px-5 py-4 bg-white dark:bg-[#132238] border-b border-[#E2E8F0] dark:border-[#1E3A5F] flex items-center justify-between transition-colors">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#0284C7] text-white flex items-center justify-center shadow-xs">
-              <Sparkles className="w-4 h-4 text-[#BAE6FD]" />
-            </div>
-            <div>
-              <div className="text-xs font-bold text-[#0F172A] dark:text-[#F8FAFC] flex items-center gap-1.5">
-                <span>SELLVION Copilot</span>
-                <span className="text-[10px] text-[#0284C7] dark:text-[#38BDF8] font-medium font-mono">
-                  Autonomous Teammate
-                </span>
-              </div>
-              <div className="text-[10px] text-[#64748B] dark:text-[#94A3B8]">
-                Connected to store orders, customer cadences, and udhaar ledger
-              </div>
-            </div>
-          </div>
+  const presets = [
+    tr(language, 'Which customers have pending udhaar?', 'किन ग्राहकों पर उधार बकाया है?'),
+    tr(language, 'Which COD orders look risky?', 'कौन से COD ऑर्डर जोखिम भरे दिख रहे हैं?'),
+    tr(language, 'Who is due to reorder soon?', 'कौन जल्द रीऑर्डर करने वाला है?'),
+  ];
 
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+      <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-[#0B1E40] border border-[#CBD5E1] dark:border-[#1E3A5F] shadow-2xl overflow-hidden flex flex-col max-h-[82vh]">
+        <div className="px-5 py-4 border-b border-[#E2E8F0] dark:border-[#1E3A5F] flex items-center justify-between bg-[#F8FAFC] dark:bg-[#071A35]">
+          <div className="flex items-center gap-2 text-[#071A35] dark:text-white">
+            <Sparkles className="w-4 h-4 text-[#2563EB] dark:text-[#22D3EE]" />
+            <span className="text-sm font-extrabold">
+              {tr(language, 'Ask Store Assistant', 'स्टोर सहायक से पूछें')}
+            </span>
+          </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-[#64748B] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-white hover:bg-[#F1F5F9] dark:hover:bg-[#1B2E4B] rounded-lg transition-colors cursor-pointer"
+            aria-label={tr(language, 'Close store assistant', 'सहायक बंद करें')}
+            className="p-1.5 rounded-lg hover:bg-[#E2E8F0] dark:hover:bg-white/10 text-[#071A35] dark:text-white cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Message Thread */}
-        <div className="flex-1 p-4 overflow-y-auto space-y-3">
-          {messages.map((msg, i) => (
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 text-xs sm:text-sm">
+          {messages.map((m, idx) => (
             <div
-              key={i}
-              className={`flex gap-2.5 text-xs ${
-                msg.sender === 'user' ? 'justify-end' : 'justify-start'
+              key={idx}
+              className={`p-3 rounded-xl max-w-[90%] ${
+                m.role === 'user'
+                  ? 'ml-auto bg-[#2563EB] text-white'
+                  : 'bg-[#F0F7FF] dark:bg-[#061533] text-[#071A35] dark:text-white'
               }`}
             >
-              {msg.sender === 'assistant' && (
-                <div className="w-6 h-6 rounded-md bg-[#0284C7] text-white flex items-center justify-center shrink-0 mt-0.5">
-                  <Bot className="w-3.5 h-3.5 text-[#BAE6FD]" />
-                </div>
-              )}
-
-              <div
-                className={`max-w-[80%] p-3 rounded-xl leading-relaxed whitespace-pre-wrap ${
-                  msg.sender === 'user'
-                    ? 'bg-[#0284C7] text-white rounded-tr-xs shadow-sm shadow-[#0284C7]/20'
-                    : 'bg-white dark:bg-[#132238] border border-[#E2E8F0] dark:border-[#1E3A5F] text-[#0F172A] dark:text-[#F8FAFC] rounded-tl-xs shadow-2xs'
-                }`}
-              >
-                {msg.text}
-              </div>
+              {m.text}
             </div>
           ))}
-
-          {isLoading && (
-            <div className="flex gap-2.5 text-xs items-center text-[#64748B] dark:text-[#94A3B8]">
-              <div className="w-6 h-6 rounded-md bg-[#0284C7] text-white flex items-center justify-center shrink-0">
-                <RefreshCw className="w-3.5 h-3.5 text-[#BAE6FD] animate-spin" />
-              </div>
-              <span className="italic">SELLVION is analyzing customer graph...</span>
+          {loading && (
+            <div className="flex items-center gap-2 text-xs text-[#64748B]">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              <span>{tr(language, 'Checking your store records...', 'आपके स्टोर रिकॉर्ड जांचे जा रहे हैं...')}</span>
             </div>
           )}
         </div>
 
-        {/* Quick Prompt Chips */}
-        <div className="px-4 py-2 border-t border-[#E2E8F0] dark:border-[#1E3A5F] bg-white dark:bg-[#132238] flex items-center gap-1.5 overflow-x-auto text-[11px] transition-colors">
-          <span className="text-[#64748B] dark:text-[#94A3B8] shrink-0 font-medium">Try:</span>
-          {quickPrompts.map((qp, idx) => (
+        <div className="px-4 py-2 border-t border-[#E2E8F0] dark:border-[#1E3A5F] flex flex-wrap gap-1.5">
+          {presets.map((preset) => (
             <button
-              key={idx}
-              onClick={() => handleSendMessage(qp)}
-              className="px-2.5 py-1 rounded-md bg-[#F8FAFC] dark:bg-[#0B1320] border border-[#E2E8F0] dark:border-[#1E3A5F] hover:border-[#0284C7] dark:hover:border-[#38BDF8] text-[#334155] dark:text-[#CBD5E1] hover:text-[#0284C7] dark:hover:text-[#38BDF8] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
+              key={preset}
+              onClick={() => handleAsk(preset)}
+              className="px-2.5 py-1 rounded-lg bg-[#F8FAFC] dark:bg-[#061533] border border-[#E2E8F0] dark:border-[#1E3A5F] text-[11px] font-medium text-[#071A35] dark:text-white hover:border-[#2563EB] cursor-pointer"
             >
-              {qp}
+              {preset}
             </button>
           ))}
         </div>
 
-        {/* Input Bar */}
-        <div className="p-3 bg-white dark:bg-[#132238] border-t border-[#E2E8F0] dark:border-[#1E3A5F] transition-colors">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSendMessage();
-            }}
-            className="flex items-center gap-2"
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleAsk();
+          }}
+          className="p-3 border-t border-[#E2E8F0] dark:border-[#1E3A5F] flex items-center gap-2"
+        >
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={tr(language, 'Ask a question about your store...', 'अपने स्टोर के बारे में कोई प्रश्न पूछें...')}
+            className="flex-1 h-10 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-[#F8FAFC] dark:bg-[#061533] text-xs text-[#071A35] dark:text-white"
+          />
+          <button
+            type="submit"
+            disabled={loading || !query.trim()}
+            className="h-10 px-4 rounded-lg bg-[#2563EB] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
           >
-            <input
-              type="text"
-              placeholder="Ask anything about customer behaviour, COD risks, or udhaar..."
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              className="flex-1 text-xs py-2 px-3 bg-[#F8FAFC] dark:bg-[#0B1320] border border-[#CBD5E1] dark:border-[#1E3A5F] rounded-xl text-[#0F172A] dark:text-[#F8FAFC] placeholder-[#94A3B8] dark:placeholder-[#64748B] focus:outline-none focus:ring-1 focus:ring-[#0284C7] dark:focus:ring-[#38BDF8]"
-            />
-            <button
-              type="submit"
-              disabled={isLoading || !inputText.trim()}
-              className="p-2 bg-[#0284C7] hover:bg-[#0369A1] text-white rounded-xl transition-colors disabled:opacity-40 cursor-pointer shadow-sm shadow-[#0284C7]/20"
-            >
-              <Send className="w-4 h-4 text-[#BAE6FD]" />
-            </button>
-          </form>
-        </div>
+            <Send className="w-3.5 h-3.5" />
+            <span>{tr(language, 'Ask', 'पूछें')}</span>
+          </button>
+        </form>
       </div>
     </div>
   );

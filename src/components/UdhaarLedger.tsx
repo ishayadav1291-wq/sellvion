@@ -1,385 +1,622 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  BookOpen,
+  IndianRupee,
+  CheckCircle2,
   Send,
   Plus,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
-  Sparkles,
-  Phone,
-  ArrowRight,
-  QrCode,
-  Receipt,
   X,
-  FileText,
+  User,
+  Edit3,
+  History,
+  Check,
+  Search,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
-import { Customer } from '../types';
+import { AppLanguage, CustomerRecord, PaymentRecord, UdhaarRecord } from '../types';
+import { apiRequest } from '../lib/api';
+import { localizeWorkflowStatus, tr } from '../i18n/translations';
 
 interface UdhaarLedgerProps {
-  customers: Customer[];
-  onRecordPayment: (customerId: string, amount: number) => void;
-  onSendReminder: (customerName: string, amount: number) => void;
+  language?: AppLanguage;
+  customers: CustomerRecord[];
+  records: UdhaarRecord[];
+  payments: PaymentRecord[];
+  onRefresh: () => void;
+  onNotify: (msg: string) => void;
+  onOpenInbox: () => void;
+  onViewCustomer?: (customerId: string) => void;
+  compactLanding?: boolean;
+}
+
+function getDaysOverdue(dueDateStr?: string): number {
+  if (!dueDateStr) return 0;
+  const due = new Date(dueDateStr);
+  if (Number.isNaN(due.getTime())) return 0;
+  const diff = Math.floor((Date.now() - due.getTime()) / 86400000);
+  return Math.max(0, diff);
 }
 
 export const UdhaarLedger: React.FC<UdhaarLedgerProps> = ({
+  language = 'en',
   customers,
-  onRecordPayment,
-  onSendReminder,
+  records,
+  payments,
+  onRefresh,
+  onNotify,
+  onOpenInbox,
+  onViewCustomer,
+  compactLanding = false,
 }) => {
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
-  const [paymentAmount, setPaymentAmount] = useState<number>(1000);
-  const [reminderSentMap, setReminderSentMap] = useState<Record<string, string>>({});
-  const [statementCustomer, setStatementCustomer] = useState<Customer | null>(null);
+  const [settleModal, setSettleModal] = useState<{
+    customerId: string;
+    name: string;
+    balance: number;
+  } | null>(null);
+  const [payAmount, setPayAmount] = useState<number>(0);
+  const [payMethod, setPayMethod] = useState<'UPI' | 'Cash' | 'Bank'>('UPI');
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [newCustomerId, setNewCustomerId] = useState(customers[0]?.id || '');
+  const [newAmount, setNewAmount] = useState(1000);
+  const [newNotes, setNewNotes] = useState('Monthly store credit');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [editingApproval, setEditingApproval] = useState<{ id: string; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  // Filter customers with udhaar
-  const udhaarCustomers = customers.filter((c) => c.outstandingUdhaar > 0);
-  const totalOutstanding = udhaarCustomers.reduce((acc, c) => acc + c.outstandingUdhaar, 0);
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
 
-  const handleTriggerReminder = (cust: Customer) => {
-    onSendReminder(cust.name, cust.outstandingUdhaar);
-    setReminderSentMap((prev) => ({
-      ...prev,
-      [cust.id]: 'Gentle WhatsApp Sent Just Now',
-    }));
+  useEffect(() => {
+    if (!settleModal && !addModalOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSettleModal(null);
+        setAddModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [settleModal, addModalOpen]);
+
+  const customersWithUdhaar = customers.filter((c) => Number(c.outstanding_udhaar) > 0);
+  const filteredUdhaar = customersWithUdhaar.filter((c) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      c.name.toLowerCase().includes(q) ||
+      c.city.toLowerCase().includes(q) ||
+      c.phone.toLowerCase().includes(q)
+    );
+  });
+  const totalPending = customersWithUdhaar.reduce((s, c) => s + Number(c.outstanding_udhaar), 0);
+  const totalCollected = payments.reduce((s, p) => s + Number(p.amount), 0);
+
+  const openSettle = (c: CustomerRecord) => {
+    setSettleModal({ customerId: c.id, name: c.name, balance: Number(c.outstanding_udhaar) });
+    setPayAmount(Number(c.outstanding_udhaar));
   };
 
-  const handleSettle = (customerId: string) => {
-    onRecordPayment(customerId, paymentAmount);
-    setSelectedCustomerId(null);
+  const handleRecordPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!settleModal || payAmount <= 0) return;
+    setBusy(true);
+    try {
+      const res = await apiRequest<{ message: string }>(
+        `/api/udhaar/${settleModal.customerId}/payment`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ amount: payAmount, method: payMethod }),
+        }
+      );
+      onNotify(res.message);
+      setSettleModal(null);
+      onRefresh();
+    } catch (err: unknown) {
+      onNotify(
+        err instanceof Error
+          ? err.message
+          : tr(language, 'Payment recording failed.', 'भुगतान दर्ज नहीं हो सका।')
+      );
+    } finally {
+      setBusy(false);
+    }
   };
+
+  const handlePrepareReminder = async (customerId: string) => {
+    setBusy(true);
+    try {
+      const res = await apiRequest<{ message: string }>(
+        `/api/udhaar/${customerId}/prepare-reminder`,
+        { method: 'POST' }
+      );
+      onNotify(res.message);
+      onRefresh();
+    } catch (err: unknown) {
+      onNotify(
+        err instanceof Error
+          ? err.message
+          : tr(language, 'Could not prepare reminder.', 'रिमाइंडर तैयार नहीं हो सका।')
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSaveAndSendInline = async (approvalId: string, sendNow: boolean) => {
+    if (!editingApproval) return;
+    setBusy(true);
+    try {
+      await apiRequest(`/api/approvals/${approvalId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ suggestedMessage: editingApproval.text }),
+      });
+      if (sendNow) {
+        const res = await apiRequest<{ message: string }>(`/api/approvals/${approvalId}/decision`, {
+          method: 'POST',
+          body: JSON.stringify({ decision: 'approve' }),
+        });
+        onNotify(res.message);
+      } else {
+        onNotify(tr(language, 'Reminder message saved.', 'रिमाइंडर संदेश सहेजा गया।'));
+      }
+      setEditingApproval(null);
+      onRefresh();
+    } catch (err: unknown) {
+      onNotify(
+        err instanceof Error
+          ? err.message
+          : tr(language, 'Could not update reminder.', 'रिमाइंडर अपडेट नहीं हो सका।')
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleAddUdhaar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCustomerId || newAmount <= 0) return;
+    setBusy(true);
+    try {
+      await apiRequest('/api/udhaar', {
+        method: 'POST',
+        body: JSON.stringify({ customerId: newCustomerId, amount: newAmount, notes: newNotes }),
+      });
+      onNotify(tr(language, 'Pending balance recorded.', 'बकाया राशि दर्ज हो गई।'));
+      setAddModalOpen(false);
+      onRefresh();
+    } catch (err: unknown) {
+      onNotify(
+        err instanceof Error ? err.message : tr(language, 'Failed to add entry.', 'प्रविष्टि विफल रही।')
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const PAGE_SIZE = 6;
+  const totalPages = Math.max(1, Math.ceil(filteredUdhaar.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const displayCustomers = compactLanding
+    ? filteredUdhaar.slice(0, 3)
+    : filteredUdhaar.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   return (
-    <div className="space-y-6">
-      {/* Title & Introduction */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-xs text-[#64748B] dark:text-[#94A3B8] mb-1">
-            <span>Digital Ledger & Khata</span>
-            <span>·</span>
-            <span className="font-semibold text-[#0284C7] dark:text-[#38BDF8]">Courteous Payment Recovery</span>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-[#0B1E40] border border-[#E2E8F0] dark:border-[#1E3A5F] rounded-2xl p-4">
+        <div className="flex flex-wrap items-center gap-6 text-xs">
+          <div>
+            <div className="text-[#64748B] dark:text-[#94A3B8]">
+              {tr(language, 'Pending Customer Payments', 'ग्राहकों पर कुल बकाया (उधार)')}
+            </div>
+            <div className="text-lg font-extrabold text-[#D97706] tabular-nums">
+              ₹{totalPending.toLocaleString('en-IN')}
+            </div>
           </div>
-          <h2 className="text-2xl font-bold tracking-tight text-[#0F172A] dark:text-[#F8FAFC]">
-            Udhaar & Credit Collections
-          </h2>
-          <p className="text-sm text-[#475569] dark:text-[#94A3B8] mt-0.5">
-            Automate polite payment reminders that preserve relationships while accelerating cashflow into your bank account.
-          </p>
-        </div>
-      </div>
-
-      {/* KPI Highlights */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-[#132238] rounded-xl border border-[#E2E8F0] dark:border-[#1E3A5F] p-4 shadow-xs transition-colors">
-          <div className="text-xs text-[#64748B] dark:text-[#94A3B8] font-medium">Total Active Udhaar Tracked</div>
-          <div className="text-2xl font-bold text-[#0F172A] dark:text-[#F8FAFC] font-mono tabular-nums mt-1">
-            ₹{totalOutstanding.toLocaleString('en-IN')}
+          <div>
+            <div className="text-[#64748B] dark:text-[#94A3B8]">
+              {tr(language, 'Payments Recorded', 'वसूली गई राशि')}
+            </div>
+            <div className="text-lg font-extrabold text-[#16A34A] tabular-nums">
+              ₹{totalCollected.toLocaleString('en-IN')}
+            </div>
           </div>
-          <div className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-0.5">
-            Across {udhaarCustomers.length} valued regular customers
+          <div>
+            <div className="text-[#64748B] dark:text-[#94A3B8]">
+              {tr(language, 'Customers With Balance', 'बकाया वाले ग्राहक')}
+            </div>
+            <div className="text-lg font-extrabold text-[#071A35] dark:text-white tabular-nums">
+              {customersWithUdhaar.length}
+            </div>
           </div>
-        </div>
-
-        <div className="bg-white dark:bg-[#132238] rounded-xl border border-[#E2E8F0] dark:border-[#1E3A5F] p-4 shadow-xs transition-colors">
-          <div className="text-xs text-[#64748B] dark:text-[#94A3B8] font-medium">Collected This Month</div>
-          <div className="text-2xl font-bold text-[#0284C7] dark:text-[#38BDF8] font-mono tabular-nums mt-1">
-            ₹64,200
-          </div>
-          <div className="text-[11px] text-[#0284C7] dark:text-[#38BDF8] mt-0.5">71.8% on-time recovery rate</div>
         </div>
 
-        <div className="bg-white dark:bg-[#132238] rounded-xl border border-[#E2E8F0] dark:border-[#1E3A5F] p-4 shadow-xs transition-colors">
-          <div className="text-xs text-[#64748B] dark:text-[#94A3B8] font-medium">Average Days to Collect</div>
-          <div className="text-2xl font-bold text-[#0284C7] dark:text-[#38BDF8] font-mono tabular-nums mt-1">
-            5.2 Days
-          </div>
-          <div className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-0.5">Down from 18 days manual follow-up</div>
-        </div>
-      </div>
-
-      {/* Mobile Card Stack View (<768px) - Fixes Mobile Table Density */}
-      <div className="block md:hidden space-y-3">
-        {udhaarCustomers.map((cust) => {
-          const reminderStatus = reminderSentMap[cust.id];
-
-          return (
-            <div
-              key={cust.id}
-              className="p-4 bg-white dark:bg-[#132238] rounded-xl border border-[#E2E8F0] dark:border-[#1E3A5F] shadow-xs space-y-3"
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="font-bold text-sm text-[#0F172A] dark:text-[#F8FAFC]">
-                    {cust.name}
-                  </div>
-                  <div className="text-[11px] text-[#64748B] dark:text-[#94A3B8]">
-                    {cust.city} · {cust.phone}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-bold font-mono text-[#DC2626] dark:text-[#F87171]">
-                    ₹{cust.outstandingUdhaar.toLocaleString('en-IN')}
-                  </div>
-                  <div className="text-[10px] text-[#DC2626] dark:text-[#F87171] font-medium">
-                    Overdue
-                  </div>
-                </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {!compactLanding && (
+            <>
+              <div className="relative min-w-[180px]">
+                <Search className="w-3.5 h-3.5 text-[#64748B] absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={tr(language, 'Search customer, city, phone...', 'ग्राहक, शहर या फोन खोजें...')}
+                  className="h-9 pl-8 pr-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-[#F8FAFC] dark:bg-[#061533] text-xs text-[#071A35] dark:text-white"
+                />
               </div>
+              <button
+                onClick={() => setHistoryOpen((v) => !v)}
+                className="h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+              >
+                <History className="w-3.5 h-3.5 text-[#2563EB] dark:text-[#22D3EE]" />
+                <span>
+                  {historyOpen
+                    ? tr(language, 'Hide History', 'इतिहास छिपाएं')
+                    : `${tr(language, 'Payment History', 'भुगतान इतिहास')} (${payments.length})`}
+                </span>
+              </button>
+            </>
+          )}
+          <button
+            onClick={() => {
+              setNewCustomerId(customers[0]?.id || '');
+              setAddModalOpen(true);
+            }}
+            disabled={customers.length === 0}
+            className="h-9 px-3.5 rounded-lg bg-[#2563EB] hover:bg-[#071A35] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>{tr(language, 'Add Credit Balance', 'उधार जोड़ें')}</span>
+          </button>
+        </div>
+      </div>
 
-              <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#F1F5F9] dark:border-[#1E3A5F]">
-                <button
-                  onClick={() => setStatementCustomer(cust)}
-                  className="text-xs text-[#0284C7] dark:text-[#38BDF8] hover:underline flex items-center gap-1 font-medium cursor-pointer"
+      {historyOpen && !compactLanding && (
+        <div className="rounded-2xl border border-[#E2E8F0] dark:border-[#1E3A5F] bg-white dark:bg-[#0B1E40] p-4 space-y-2">
+          <h4 className="text-xs font-extrabold text-[#071A35] dark:text-white">
+            {tr(language, 'Recent Recorded Payments', 'हाल ही में प्राप्त भुगतान')}
+          </h4>
+          {payments.length === 0 ? (
+            <p className="text-xs text-[#64748B]">
+              {tr(language, 'No payments recorded yet.', 'अभी कोई भुगतान दर्ज नहीं है।')}
+            </p>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
+              {payments.slice(0, 9).map((p) => (
+                <div
+                  key={p.id}
+                  className="p-2.5 rounded-xl bg-[#F8FAFC] dark:bg-[#061533] flex items-center justify-between gap-2"
                 >
-                  <FileText className="w-3.5 h-3.5" />
-                  <span>Statement</span>
-                </button>
+                  <div className="min-w-0">
+                    <div className="font-bold text-[#071A35] dark:text-white truncate">
+                      {p.customer_name}
+                    </div>
+                    <div className="text-[11px] text-[#64748B]">
+                      {p.method} · {p.paid_at.slice(0, 10)}
+                    </div>
+                  </div>
+                  <div className="font-extrabold text-[#16A34A] tabular-nums shrink-0">
+                    ₹{Number(p.amount).toLocaleString('en-IN')}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
-                <div className="flex items-center gap-2">
-                  {reminderStatus ? (
-                    <span className="text-[11px] text-[#0284C7] dark:text-[#38BDF8] font-medium">
-                      ✓ Sent
-                    </span>
-                  ) : (
+      {displayCustomers.length === 0 ? (
+        <div className="p-8 rounded-2xl border border-dashed border-[#CBD5E1] dark:border-[#1E3A5F] text-center text-sm text-[#64748B]">
+          {tr(
+            language,
+            'All customer credit balances are settled right now.',
+            'अभी किसी भी ग्राहक पर कोई उधार बकाया नहीं है।'
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="grid md:grid-cols-2 gap-4">
+          {displayCustomers.map((c) => {
+            const matchingRecord = records.find((r) => r.customer_id === c.id && r.remaining_amount > 0);
+            const dueDate = c.udhaar_due_date || matchingRecord?.due_date || '';
+            const overdueDays = getDaysOverdue(dueDate);
+            const followupStatus = matchingRecord?.latest_followup_status;
+            const followupId = matchingRecord?.latest_followup_id;
+            const followupMsg = matchingRecord?.latest_followup_message;
+            const isEditingThis = Boolean(followupId && editingApproval?.id === followupId);
+
+            return (
+              <div
+                key={c.id}
+                className="rounded-2xl border border-[#E2E8F0] dark:border-[#1E3A5F] bg-white dark:bg-[#0B1E40] p-5 flex flex-col justify-between gap-4"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h4 className="text-base font-extrabold text-[#071A35] dark:text-white">{c.name}</h4>
+                      <div className="text-xs text-[#64748B] dark:text-[#94A3B8]">
+                        {c.city} · {c.phone}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-extrabold text-[#D97706] tabular-nums flex items-center justify-end">
+                        <IndianRupee className="w-4 h-4" />
+                        {Number(c.outstanding_udhaar).toLocaleString('en-IN')}
+                      </div>
+                      <div
+                        className={`text-[11px] font-bold ${
+                          overdueDays > 0 ? 'text-[#DC2626]' : 'text-[#64748B]'
+                        }`}
+                      >
+                        {overdueDays > 0
+                          ? `${overdueDays} ${tr(language, 'days overdue', 'दिन से बकाया')}`
+                          : dueDate
+                          ? `${tr(language, 'Due', 'देय')} ${dueDate}`
+                          : tr(language, 'Scheduled', 'नियोजित')}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div className="p-2.5 rounded-xl bg-[#F8FAFC] dark:bg-[#061533]">
+                      <div className="text-[#64748B]">
+                        {tr(language, 'Previous Payment', 'पिछला भुगतान')}
+                      </div>
+                      <div className="font-bold text-[#071A35] dark:text-white tabular-nums mt-0.5">
+                        {matchingRecord?.last_payment_amount
+                          ? `₹${Number(matchingRecord.last_payment_amount).toLocaleString(
+                              'en-IN'
+                            )} (${String(matchingRecord.last_payment_date || '').slice(0, 10)})`
+                          : tr(language, 'No prior payment', 'कोई पिछला भुगतान नहीं')}
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-[#F8FAFC] dark:bg-[#061533]">
+                      <div className="text-[#64748B]">
+                        {tr(language, 'Follow-up Status', 'फॉलो-अप स्थिति')}
+                      </div>
+                      <div className="font-bold text-[#2563EB] dark:text-[#22D3EE] mt-0.5">
+                        {followupStatus
+                          ? localizeWorkflowStatus(language, followupStatus)
+                          : tr(language, 'Not prepared yet', 'अभी तैयार नहीं')}
+                      </div>
+                    </div>
+                  </div>
+
+                  {isEditingThis && followupId && (
+                    <div className="space-y-2 p-3 rounded-xl bg-[#EFF6FF] dark:bg-[#061533] border border-[#BFDBFE] dark:border-[#1E3A5F]">
+                      <textarea
+                        rows={3}
+                        value={editingApproval!.text}
+                        onChange={(e) =>
+                          setEditingApproval({ id: followupId, text: e.target.value })
+                        }
+                        className="w-full rounded-lg border border-[#2563EB] bg-white dark:bg-[#0B1E40] p-2.5 text-xs"
+                      />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          disabled={busy}
+                          onClick={() => handleSaveAndSendInline(followupId, true)}
+                          className="h-8 px-3 rounded-lg bg-[#2563EB] text-white text-xs font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>{tr(language, 'Save & Approve Send', 'सहेजें और भेजें')}</span>
+                        </button>
+                        <button
+                          disabled={busy}
+                          onClick={() => handleSaveAndSendInline(followupId, false)}
+                          className="h-8 px-3 rounded-lg border border-[#CBD5E1] text-xs font-semibold cursor-pointer"
+                        >
+                          {tr(language, 'Save Draft Only', 'सिर्फ ड्राफ्ट सहेजें')}
+                        </button>
+                        <button
+                          onClick={() => setEditingApproval(null)}
+                          className="h-8 px-2 text-xs text-[#64748B] cursor-pointer"
+                        >
+                          {tr(language, 'Cancel', 'रद्द करें')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#E2E8F0] dark:border-[#1E3A5F]">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {followupStatus === 'pending_approval' && followupId ? (
+                      <>
+                        <button
+                          disabled={busy}
+                          onClick={() =>
+                            setEditingApproval({ id: followupId, text: followupMsg || '' })
+                          }
+                          className="h-9 px-3 rounded-lg bg-[#2563EB] hover:bg-[#071A35] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>{tr(language, 'Edit & Approve', 'बदलें व मंजूर करें')}</span>
+                        </button>
+                        <button
+                          onClick={onOpenInbox}
+                          className="h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] text-xs font-bold cursor-pointer"
+                        >
+                          {tr(language, 'Open Action Center', 'मंजूरी केंद्र खोलें')}
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        disabled={busy || c.opted_out === 1}
+                        onClick={() => handlePrepareReminder(c.id)}
+                        className="h-9 px-3.5 rounded-lg bg-[#2563EB] hover:bg-[#071A35] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>{tr(language, 'Prepare Reminder', 'रिमाइंडर तैयार करें')}</span>
+                      </button>
+                    )}
+
                     <button
-                      onClick={() => handleTriggerReminder(cust)}
-                      className="px-2.5 py-1.5 text-xs font-semibold text-white bg-[#0284C7] hover:bg-[#0369A1] rounded-lg transition-colors cursor-pointer"
+                      disabled={busy}
+                      onClick={() => openSettle(c)}
+                      className="h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] hover:border-[#16A34A] text-xs font-bold text-[#071A35] dark:text-white flex items-center gap-1.5 cursor-pointer"
                     >
-                      Nudge
+                      <CheckCircle2 className="w-3.5 h-3.5 text-[#16A34A]" />
+                      <span>{tr(language, 'Record Payment', 'भुगतान दर्ज करें')}</span>
+                    </button>
+                  </div>
+
+                  {onViewCustomer && (
+                    <button
+                      onClick={() => onViewCustomer(c.id)}
+                      className="text-xs font-bold text-[#2563EB] dark:text-[#22D3EE] hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <User className="w-3.5 h-3.5" />
+                      <span>{tr(language, 'View Customer', 'ग्राहक देखें')}</span>
                     </button>
                   )}
-                  <button
-                    onClick={() => {
-                      setSelectedCustomerId(cust.id);
-                      setPaymentAmount(cust.outstandingUdhaar);
-                    }}
-                    className="px-2.5 py-1.5 text-xs font-medium text-[#0F172A] dark:text-[#F8FAFC] bg-white dark:bg-[#1B2E4B] border border-[#CBD5E1] dark:border-[#1E3A5F] rounded-lg cursor-pointer"
-                  >
-                    Pay
-                  </button>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Desktop Udhaar Ledger Table (hidden on mobile, visible md:table) */}
-      <div className="hidden md:block bg-white dark:bg-[#132238] rounded-2xl border border-[#E2E8F0] dark:border-[#1E3A5F] overflow-hidden shadow-xs transition-colors">
-        <div className="p-4 border-b border-[#E2E8F0] dark:border-[#1E3A5F] bg-[#F8FAFC] dark:bg-[#0F1A2C] flex items-center justify-between">
-          <h3 className="text-sm font-bold text-[#0F172A] dark:text-[#F8FAFC]">
-            Customer Khata Accounts
-          </h3>
-          <span className="text-xs text-[#0284C7] dark:text-[#38BDF8] font-mono">
-            Source of Truth: Merchant Khata API
-          </span>
+            );
+          })}
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-[#F8FAFC] dark:bg-[#0F1A2C] border-b border-[#E2E8F0] dark:border-[#1E3A5F] text-[#64748B] dark:text-[#94A3B8] font-semibold">
-                <th className="py-3 px-4">Customer</th>
-                <th className="py-3 px-4">Contact</th>
-                <th className="py-3 px-4">Due Date</th>
-                <th className="py-3 px-4 text-right">Balance Pending</th>
-                <th className="py-3 px-4">Status & Aging</th>
-                <th className="py-3 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#F1F5F9] dark:divide-[#1E3A5F] text-[#334155] dark:text-[#CBD5E1]">
-              {udhaarCustomers.map((cust) => {
-                const reminderStatus = reminderSentMap[cust.id];
-
-                return (
-                  <tr key={cust.id} className="hover:bg-[#F0F9FF] dark:hover:bg-[#1A2E4C] transition-colors">
-                    <td className="py-3 px-4">
-                      <div className="font-bold text-[#0F172A] dark:text-[#F8FAFC]">{cust.name}</div>
-                      <div className="text-[11px] text-[#64748B] dark:text-[#94A3B8]">{cust.city}</div>
-                    </td>
-
-                    <td className="py-3 px-4 font-mono text-[#64748B] dark:text-[#94A3B8]">
-                      {cust.phone}
-                    </td>
-
-                    <td className="py-3 px-4 font-mono tabular-nums text-[#334155] dark:text-[#CBD5E1]">
-                      {cust.udhaarDueDate || '2026-11-15'}
-                    </td>
-
-                    <td className="py-3 px-4 text-right font-mono tabular-nums font-bold text-[#DC2626] dark:text-[#F87171]">
-                      ₹{cust.outstandingUdhaar.toLocaleString('en-IN')}
-                    </td>
-
-                    <td className="py-3 px-4">
-                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#DC2626] dark:text-[#F87171]">
-                        <Clock className="w-3 h-3" /> Overdue (7 days)
-                      </span>
-                    </td>
-
-                    <td className="py-3 px-4 text-right space-x-2">
-                      <button
-                        onClick={() => setStatementCustomer(cust)}
-                        className="px-2.5 py-1.5 text-xs font-medium text-[#0284C7] dark:text-[#38BDF8] hover:bg-[#E0F2FE] dark:hover:bg-[#1E3A5F] rounded-lg transition-colors cursor-pointer"
-                      >
-                        Statement
-                      </button>
-
-                      {reminderStatus ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-[#0284C7] dark:text-[#38BDF8] font-medium mr-2">
-                          <CheckCircle2 className="w-3 h-3" /> {reminderStatus}
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => handleTriggerReminder(cust)}
-                          className="px-3 py-1.5 text-xs font-semibold text-white bg-[#0284C7] hover:bg-[#0369A1] rounded-lg transition-colors inline-flex items-center gap-1 shadow-sm shadow-[#0284C7]/20 cursor-pointer"
-                        >
-                          <Send className="w-3 h-3 text-[#BAE6FD]" />
-                          <span>Send Nudge</span>
-                        </button>
-                      )}
-
-                      <button
-                        onClick={() => {
-                          setSelectedCustomerId(cust.id);
-                          setPaymentAmount(cust.outstandingUdhaar);
-                        }}
-                        className="px-2.5 py-1.5 text-xs font-medium text-[#0F172A] dark:text-[#F8FAFC] bg-white dark:bg-[#1B2E4B] border border-[#CBD5E1] dark:border-[#1E3A5F] hover:bg-[#F8FAFC] dark:hover:bg-[#233857] rounded-lg transition-colors cursor-pointer"
-                      >
-                        Record Payment
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Dynamic Khata Statement & UPI QR Modal */}
-      {statementCustomer && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-white dark:bg-[#132238] rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#BAE6FD] dark:border-[#1E3A5F] space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0] dark:border-[#1E3A5F]">
-              <div className="flex items-center gap-2">
-                <Receipt className="w-4 h-4 text-[#0284C7] dark:text-[#38BDF8]" />
-                <h3 className="text-base font-bold text-[#0F172A] dark:text-[#F8FAFC]">
-                  Khata Account Statement
-                </h3>
-              </div>
+        {!compactLanding && totalPages > 1 && (
+          <div className="flex items-center justify-between text-xs text-[#64748B] pt-1">
+            <span className="tabular-nums">
+              {tr(language, 'Page', 'पृष्ठ')} {safePage} / {totalPages} · {filteredUdhaar.length}{' '}
+              {tr(language, 'accounts', 'खाते')}
+            </span>
+            <div className="flex items-center gap-1.5">
               <button
-                onClick={() => setStatementCustomer(null)}
-                className="p-1.5 text-[#64748B] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-white rounded-lg transition-colors cursor-pointer"
+                disabled={safePage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="h-8 px-2.5 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#0B1E40] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-40"
               >
-                <X className="w-5 h-5" />
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>{tr(language, 'Prev', 'पिछला')}</span>
+              </button>
+              <button
+                disabled={safePage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="h-8 px-2.5 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#0B1E40] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-40"
+              >
+                <span>{tr(language, 'Next', 'अगला')}</span>
+                <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
+          </div>
+        )}
+        </>
+      )}
 
-            <div className="p-3 rounded-xl bg-[#F8FAFC] dark:bg-[#0F1A2C] border border-[#E2E8F0] dark:border-[#1E3A5F] space-y-1.5 text-xs">
-              <div className="flex justify-between">
-                <span className="text-[#64748B] dark:text-[#94A3B8]">Customer:</span>
-                <span className="font-bold text-[#0F172A] dark:text-[#F8FAFC]">{statementCustomer.name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#64748B] dark:text-[#94A3B8]">Phone:</span>
-                <span className="font-mono text-[#0F172A] dark:text-[#F8FAFC]">{statementCustomer.phone}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#64748B] dark:text-[#94A3B8]">Due Date:</span>
-                <span className="font-mono text-[#0F172A] dark:text-[#F8FAFC]">{statementCustomer.udhaarDueDate}</span>
-              </div>
-              <div className="flex justify-between pt-1 border-t border-[#E2E8F0] dark:border-[#1E3A5F] font-bold">
-                <span className="text-[#0F172A] dark:text-[#F8FAFC]">Outstanding Balance:</span>
-                <span className="text-[#DC2626] dark:text-[#F87171] font-mono text-sm">₹{statementCustomer.outstandingUdhaar.toLocaleString('en-IN')}</span>
-              </div>
-            </div>
-
-            {/* Simulated UPI QR Code */}
-            <div className="text-center p-4 bg-[#F0F9FF] dark:bg-[#0C243B] rounded-xl border border-[#BAE6FD] dark:border-[#1E3A5F] space-y-2">
-              <div className="w-24 h-24 mx-auto bg-white p-2 rounded-lg shadow-xs flex items-center justify-center">
-                <QrCode className="w-20 h-20 text-[#0284C7]" />
-              </div>
-              <div className="text-xs font-bold text-[#0284C7] dark:text-[#38BDF8]">
-                Scan to Settle Khata via BHIM / GPay / PhonePe
-              </div>
-              <div className="text-[10px] font-mono text-[#64748B] dark:text-[#94A3B8]">
-                upi://pay?pa=sellvion.merchant@okaxis&am={statementCustomer.outstandingUdhaar}
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-[#E2E8F0] dark:border-[#1E3A5F]">
-              <button
-                onClick={() => setStatementCustomer(null)}
-                className="px-4 py-2 text-xs font-semibold text-white bg-[#0284C7] hover:bg-[#0369A1] rounded-xl transition-colors cursor-pointer"
-              >
-                Close Statement
+      {settleModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-[#0B1E40] border border-[#CBD5E1] dark:border-[#1E3A5F] p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-extrabold text-[#071A35] dark:text-white">
+                {tr(language, 'Record Payment', 'भुगतान दर्ज करें')} · {settleModal.name}
+              </h3>
+              <button onClick={() => setSettleModal(null)} className="p-1 cursor-pointer">
+                <X className="w-4 h-4" />
               </button>
             </div>
+            <form onSubmit={handleRecordPayment} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold mb-1">
+                  {tr(language, 'Amount Received', 'प्राप्त राशि')} (
+                  {tr(language, 'Pending', 'बाकी')}: ₹{settleModal.balance.toLocaleString('en-IN')})
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={payAmount}
+                  onChange={(e) => setPayAmount(Number(e.target.value))}
+                  className="w-full h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#061533]"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold mb-1">
+                  {tr(language, 'Payment Method', 'भुगतान माध्यम')}
+                </label>
+                <select
+                  value={payMethod}
+                  onChange={(e) => setPayMethod(e.target.value as typeof payMethod)}
+                  className="w-full h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#061533]"
+                >
+                  <option value="UPI">UPI / Paytm</option>
+                  <option value="Cash">{tr(language, 'Cash', 'नकद')}</option>
+                  <option value="Bank">{tr(language, 'Bank Transfer', 'बैंक ट्रांसफर')}</option>
+                </select>
+              </div>
+              <button
+                type="submit"
+                disabled={busy}
+                className="w-full h-10 rounded-lg bg-[#16A34A] text-white font-bold cursor-pointer disabled:opacity-50"
+              >
+                {busy
+                  ? tr(language, 'Recording...', 'दर्ज हो रहा है...')
+                  : tr(language, 'Confirm Payment Received', 'भुगतान की पुष्टि करें')}
+              </button>
+            </form>
           </div>
         </div>
       )}
 
-      {/* Record Payment Modal */}
-      {selectedCustomerId && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#132238] rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-xl border border-[#BAE6FD] dark:border-[#1E3A5F] transition-colors">
-            <h3 className="text-base font-bold text-[#0F172A] dark:text-[#F8FAFC]">
-              Record Payment Received
-            </h3>
-            <p className="text-xs text-[#64748B] dark:text-[#94A3B8]">
-              Enter the amount collected via cash, UPI, or bank transfer.
-            </p>
-
-            <div>
-              <label className="text-xs font-medium text-[#475569] dark:text-[#CBD5E1] block mb-1">
-                Amount (₹)
-              </label>
-              <input
-                type="number"
-                value={paymentAmount}
-                onChange={(e) => setPaymentAmount(Number(e.target.value))}
-                className="w-full p-2.5 text-sm font-mono tabular-nums rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#0F1A2C] text-[#0F172A] dark:text-[#F8FAFC] focus:outline-none focus:ring-1 focus:ring-[#0284C7] dark:focus:ring-[#38BDF8]"
-              />
-            </div>
-
-            {/* Quick Settle Preset Buttons */}
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const cust = udhaarCustomers.find((c) => c.id === selectedCustomerId);
-                  if (cust) setPaymentAmount(cust.outstandingUdhaar);
-                }}
-                className="text-[11px] px-2.5 py-1 bg-[#F0F9FF] dark:bg-[#0C243B] text-[#0284C7] dark:text-[#38BDF8] rounded border border-[#BAE6FD] dark:border-[#1E3A5F] font-semibold cursor-pointer"
-              >
-                Full Settle
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const cust = udhaarCustomers.find((c) => c.id === selectedCustomerId);
-                  if (cust) setPaymentAmount(Math.round(cust.outstandingUdhaar / 2));
-                }}
-                className="text-[11px] px-2.5 py-1 bg-[#F8FAFC] dark:bg-[#132238] text-[#475569] dark:text-[#CBD5E1] rounded border border-[#E2E8F0] dark:border-[#1E3A5F] font-medium cursor-pointer"
-              >
-                50% Partial
+      {addModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-[#0B1E40] border border-[#CBD5E1] dark:border-[#1E3A5F] p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-extrabold text-[#071A35] dark:text-white">
+                {tr(language, 'Add Pending Balance', 'नया उधार जोड़ें')}
+              </h3>
+              <button onClick={() => setAddModalOpen(false)} className="p-1 cursor-pointer">
+                <X className="w-4 h-4" />
               </button>
             </div>
-
-            <div className="flex justify-end gap-2 pt-2">
+            <form onSubmit={handleAddUdhaar} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold mb-1">
+                  {tr(language, 'Customer', 'ग्राहक')}
+                </label>
+                <select
+                  value={newCustomerId}
+                  onChange={(e) => setNewCustomerId(e.target.value)}
+                  className="w-full h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#061533]"
+                >
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.city})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block font-semibold mb-1">
+                  {tr(language, 'Amount (₹)', 'राशि (₹)')}
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={newAmount}
+                  onChange={(e) => setNewAmount(Number(e.target.value))}
+                  className="w-full h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#061533]"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold mb-1">
+                  {tr(language, 'Notes', 'टिप्पणी')}
+                </label>
+                <input
+                  value={newNotes}
+                  onChange={(e) => setNewNotes(e.target.value)}
+                  className="w-full h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#061533]"
+                />
+              </div>
               <button
-                onClick={() => setSelectedCustomerId(null)}
-                className="px-4 py-2 text-xs text-[#64748B] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-white cursor-pointer"
+                type="submit"
+                disabled={busy}
+                className="w-full h-10 rounded-lg bg-[#2563EB] text-white font-bold cursor-pointer"
               >
-                Cancel
+                {tr(language, 'Save Balance', 'उधार सहेजें')}
               </button>
-              <button
-                onClick={() => handleSettle(selectedCustomerId)}
-                className="px-4 py-2 text-xs font-semibold text-white bg-[#0284C7] hover:bg-[#0369A1] rounded-lg transition-colors cursor-pointer shadow-sm shadow-[#0284C7]/20"
-              >
-                Confirm & Settle Khata
-              </button>
-            </div>
+            </form>
           </div>
         </div>
       )}

@@ -48,9 +48,9 @@ export const FaqSection: React.FC = () => {
   };
 
   return (
-    <section id="faq" className="space-y-8 scroll-mt-24">
-      <div className="text-center max-w-2xl mx-auto space-y-2">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EAF2FF] dark:bg-[#0C243B] text-xs font-semibold text-[#0066FF] dark:text-[#38BDF8]">
+    <section id="faq" className="space-y-4 scroll-mt-24">
+      <div className="text-center max-w-2xl mx-auto space-y-1">
+        <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#EAF2FF] dark:bg-[#0C243B] text-xs font-semibold text-[#0066FF] dark:text-[#38BDF8]">
           <HelpCircle className="w-3.5 h-3.5" />
           <span>Frequently Asked Questions</span>
         </div>
@@ -62,13 +62,13 @@ export const FaqSection: React.FC = () => {
         </p>
       </div>
 
-      <div className="max-w-3xl mx-auto space-y-3">
+      <div className="max-w-3xl mx-auto space-y-2">
         {FAQS.map((item, idx) => {
           const isOpen = openIndex === idx;
           return (
             <div
               key={idx}
-              className={`rounded-2xl border transition-all ${
+              className={`rounded-xl border transition-all ${
                 isOpen
                   ? 'bg-white dark:bg-[#132238] border-[#0066FF] dark:border-[#38BDF8] shadow-sm'
                   : 'bg-white/80 dark:bg-[#132238]/70 border-[#E2E8F0] dark:border-[#1E3A5F] hover:border-[#CBD5E1]'
@@ -76,29 +76,29 @@ export const FaqSection: React.FC = () => {
             >
               <button
                 onClick={() => toggle(idx)}
-                className="w-full text-left p-5 flex items-center justify-between gap-4 cursor-pointer"
+                className="w-full text-left px-4 py-3 flex items-center justify-between gap-3 cursor-pointer"
               >
                 <div>
-                  <span className="text-[10px] font-bold tracking-wider uppercase text-[#0066FF] dark:text-[#38BDF8] block mb-1">
+                  <span className="text-[10px] font-bold tracking-wider uppercase text-[#0066FF] dark:text-[#38BDF8] block mb-0.5">
                     {item.category}
                   </span>
-                  <h3 className="text-sm sm:text-base font-bold text-[#0F1E36] dark:text-white">
+                  <h3 className="text-sm font-bold text-[#0F1E36] dark:text-white leading-snug">
                     {item.q}
                   </h3>
                 </div>
                 <div
-                  className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-200 ${
+                  className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-transform duration-200 ${
                     isOpen
                       ? 'bg-[#0066FF] text-white rotate-180'
                       : 'bg-[#F1F5F9] dark:bg-[#0C243B] text-[#64748B] dark:text-[#94A3B8]'
                   }`}
                 >
-                  <ChevronDown className="w-4 h-4" />
+                  <ChevronDown className="w-3.5 h-3.5" />
                 </div>
               </button>
 
               {isOpen && (
-                <div className="px-5 pb-5 text-xs sm:text-sm text-[#475569] dark:text-[#94A3B8] leading-relaxed border-t border-[#F1F5F9] dark:border-[#1E3A5F] mt-2 pt-3">
+                <div className="px-4 pb-3 text-xs sm:text-sm text-[#475569] dark:text-[#94A3B8] leading-relaxed border-t border-[#F1F5F9] dark:border-[#1E3A5F] pt-2">
                   {item.a}
                 </div>
               )}

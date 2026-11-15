@@ -12,10 +12,19 @@ import {
   ArrowRight,
   QrCode,
   CheckCircle2,
+  Users,
+  History,
+  Search,
+  Phone,
+  MapPin,
+  Clock,
+  ChevronRight,
+  X,
+  Sparkles,
 } from 'lucide-react';
 import { Customer } from '../types';
 
-export type ProductTourTab = 'whatsapp' | 'cod' | 'udhaar' | 'calculator';
+export type ProductTourTab = 'whatsapp' | 'cod' | 'udhaar' | 'calculator' | 'customers';
 
 interface ProductTourProps {
   activeTab: ProductTourTab;
@@ -27,9 +36,22 @@ interface ProductTourProps {
 
 type ScenarioKey = 'reorder' | 'cod_prepay' | 'udhaar' | 'winback';
 
+interface DraftHistoryItem {
+  id: string;
+  scenario: ScenarioKey;
+  scenarioLabel: string;
+  customer: string;
+  tone: 'warm_hinglish' | 'direct' | 'festival';
+  toneLabel: string;
+  message: string;
+  timestamp: string;
+  status: 'Sent' | 'Rewritten' | 'Saved';
+}
+
 export const ProductTour: React.FC<ProductTourProps> = ({
   activeTab,
   onChangeTab,
+  customers,
   onOpenWorkspace,
   onActionTriggered,
 }) => {
@@ -42,6 +64,44 @@ export const ProductTour: React.FC<ProductTourProps> = ({
   );
   const [sentState, setSentState] = useState<'idle' | 'sent' | 'replied'>('idle');
   const [customerReply, setCustomerReply] = useState<string>('');
+  const [draftHistory, setDraftHistory] = useState<DraftHistoryItem[]>([
+    {
+      id: 'DH-101',
+      scenario: 'udhaar',
+      scenarioLabel: 'Udhaar Reminder',
+      customer: 'Sunita Agarwal',
+      tone: 'festival',
+      toneLabel: 'Festival Offer',
+      message:
+        'Namaste Sunita ji! 🙏 Aapka ₹3,450 ka monthly khata balance pending hai. Jab free hon tab is UPI link se clear kar dein: https://pay.sellvion.in/u/103 — Dhanyawad!',
+      timestamp: 'Today, 11:32 AM',
+      status: 'Sent',
+    },
+    {
+      id: 'DH-102',
+      scenario: 'reorder',
+      scenarioLabel: 'Repeat Order',
+      customer: 'Priya Sharma',
+      tone: 'warm_hinglish',
+      toneLabel: 'Warm Hinglish',
+      message:
+        'Namaste Priya ji! 🙏 Aapka Darjeeling First Flush Gold Blend khatam hone wala hoga (~28 din pehle mangwaya tha). Kya hum fresh batch dispatch karein? Reorder link: https://sellvion.in/r/101',
+      timestamp: 'Today, 10:15 AM',
+      status: 'Rewritten',
+    },
+    {
+      id: 'DH-103',
+      scenario: 'cod_prepay',
+      scenarioLabel: 'COD Confirmation',
+      customer: 'Vikram Solanki',
+      tone: 'direct',
+      toneLabel: 'Short & Direct',
+      message:
+        'Namaste Vikram ji! 🙏 Aapka ₹4,200 order pack ho gaya hai. Fast dispatch ke liye abhi UPI se pay karein aur ₹100 instant discount paayein: https://pay.sellvion.in/p/9932',
+      timestamp: 'Yesterday, 4:40 PM',
+      status: 'Sent',
+    },
+  ]);
 
   // 2. Quick COD Checker state
   const [codBuyer, setCodBuyer] = useState<'new' | 'repeat'>('new');
@@ -56,6 +116,11 @@ export const ProductTour: React.FC<ProductTourProps> = ({
   const [calcOrders, setCalcOrders] = useState<number>(800);
   const [calcAov, setCalcAov] = useState<number>(1500);
   const [calcCodPct, setCalcCodPct] = useState<number>(65);
+
+  // 5. Customer 360 state
+  const [custSearch, setCustSearch] = useState<string>('');
+  const [custSegment, setCustSegment] = useState<string>('all');
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   const scenarioConfigs: Record<
     ScenarioKey,
@@ -135,6 +200,36 @@ export const ProductTour: React.FC<ProductTourProps> = ({
     }
   };
 
+  const toneLabelMap: Record<'warm_hinglish' | 'direct' | 'festival', string> = {
+    warm_hinglish: 'Warm Hinglish',
+    direct: 'Short & Direct',
+    festival: 'Festival Offer',
+  };
+
+  const recordDraftHistory = (
+    draftMessage: string,
+    status: DraftHistoryItem['status'],
+    scenarioOverride?: ScenarioKey
+  ) => {
+    const scen = scenarioOverride || selectedScenario;
+    const cfg = scenarioConfigs[scen];
+    const nowLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    setDraftHistory((prev) => [
+      {
+        id: `DH-${Date.now()}`,
+        scenario: scen,
+        scenarioLabel: cfg.label,
+        customer: cfg.customer,
+        tone: selectedTone,
+        toneLabel: toneLabelMap[selectedTone],
+        message: draftMessage,
+        timestamp: `Today, ${nowLabel}`,
+        status,
+      },
+      ...prev.slice(0, 9),
+    ]);
+  };
+
   const handleRewriteDraft = async () => {
     setIsGenerating(true);
     const config = scenarioConfigs[selectedScenario];
@@ -153,9 +248,12 @@ export const ProductTour: React.FC<ProductTourProps> = ({
         }),
       });
       const data = await res.json();
-      if (data.draft) setMessageText(data.draft);
+      if (data.draft) {
+        setMessageText(data.draft);
+        recordDraftHistory(data.draft, 'Rewritten');
+      }
     } catch {
-      // keep existing clean text if offline
+      recordDraftHistory(messageText, 'Saved');
     } finally {
       setIsGenerating(false);
     }
@@ -164,6 +262,7 @@ export const ProductTour: React.FC<ProductTourProps> = ({
   const handleSimulateSend = () => {
     setSentState('sent');
     const config = scenarioConfigs[selectedScenario];
+    recordDraftHistory(messageText, 'Sent');
     setTimeout(() => {
       setSentState('replied');
       setCustomerReply(config.defaultReply);
@@ -234,6 +333,7 @@ export const ProductTour: React.FC<ProductTourProps> = ({
             { id: 'cod', label: '2. COD Return Check', icon: ShieldAlert },
             { id: 'udhaar', label: '3. Udhaar & UPI Links', icon: IndianRupee },
             { id: 'calculator', label: '4. Monthly Savings', icon: TrendingUp },
+            { id: 'customers', label: '5. Customer 360', icon: Users },
           ].map((tab) => {
             const Icon = tab.icon;
             const isSelected = activeTab === tab.id;
@@ -394,6 +494,60 @@ export const ProductTour: React.FC<ProductTourProps> = ({
                       </div>
                     )}
                   </div>
+                </div>
+              </div>
+
+              {/* Restored Draft History Panel */}
+              <div className="lg:col-span-12 pt-5 border-t border-[#E2E8F0] dark:border-[#1E3A5F] space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-[#0F1E36] dark:text-white">
+                    <History className="w-4 h-4 text-[#0066FF] dark:text-[#38BDF8]" />
+                    <span>Draft History</span>
+                    <span className="text-[11px] font-semibold text-[#64748B] dark:text-[#94A3B8] tabular-nums">
+                      ({draftHistory.length} saved drafts)
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-[#64748B] dark:text-[#94A3B8]">
+                    Click any previous draft to load it back into the preview
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {draftHistory.slice(0, 6).map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => {
+                        setSelectedScenario(item.scenario);
+                        setSelectedTone(item.tone);
+                        setMessageText(item.message);
+                        setSentState('idle');
+                        setCustomerReply('');
+                      }}
+                      className="p-3.5 rounded-2xl bg-[#F8FAFC] dark:bg-[#0F1A2C] border border-[#E2E8F0] dark:border-[#1E3A5F] hover:border-[#0066FF] dark:hover:border-[#38BDF8] transition-colors cursor-pointer flex flex-col justify-between gap-2 text-xs"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-[#0F1E36] dark:text-white truncate">
+                          {item.customer} · {item.scenarioLabel}
+                        </span>
+                        <span
+                          className={`text-[10px] font-bold shrink-0 ${
+                            item.status === 'Sent'
+                              ? 'text-[#16A34A]'
+                              : 'text-[#0066FF] dark:text-[#38BDF8]'
+                          }`}
+                        >
+                          {item.status}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#475569] dark:text-[#CBD5E1] line-clamp-2 leading-relaxed">
+                        {item.message}
+                      </p>
+                      <div className="flex items-center justify-between text-[10px] text-[#64748B] dark:text-[#94A3B8] pt-1 border-t border-[#E2E8F0]/70 dark:border-[#1E3A5F]">
+                        <span>{item.toneLabel} · {item.timestamp}</span>
+                        <span className="font-bold text-[#0066FF] dark:text-[#38BDF8]">Load →</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -655,6 +809,286 @@ export const ProductTour: React.FC<ProductTourProps> = ({
                   <div className="text-xs text-[#E0F2FE] mt-0.5">Against ₹799/mo Pro plan</div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* TAB 5: Restored Customer 360 Screen */}
+          {activeTab === 'customers' && (
+            <div className="space-y-5">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 text-xs text-[#64748B] dark:text-[#94A3B8] mb-0.5">
+                    <span>Customer Intelligence Graph</span>
+                    <span>·</span>
+                    <span className="font-semibold text-[#0066FF] dark:text-[#38BDF8]">
+                      RFM Cadence & Udhaar Memory
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-extrabold text-[#0F1E36] dark:text-white">
+                    Customer 360
+                  </h3>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="relative w-full sm:w-64">
+                    <Search className="w-4 h-4 text-[#94A3B8] absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search name, city, SKU..."
+                      value={custSearch}
+                      onChange={(e) => setCustSearch(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 text-xs bg-[#F8FAFC] dark:bg-[#0F1A2C] border border-[#E2E8F0] dark:border-[#1E3A5F] rounded-xl text-[#0F172A] dark:text-white focus:outline-none focus:ring-1 focus:ring-[#0066FF]"
+                    />
+                  </div>
+                  <button
+                    onClick={() => onOpenWorkspace('customers')}
+                    className="px-3.5 py-2 bg-[#0066FF] hover:bg-[#0052CC] text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer shrink-0"
+                  >
+                    <span>Manage in Workspace</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Segment Filter Bar */}
+              <div className="flex items-center gap-1.5 p-1 bg-[#EFF6FF] dark:bg-[#0F1A2C] rounded-xl overflow-x-auto text-xs">
+                {[
+                  { id: 'all', label: 'All Customers' },
+                  { id: 'reorder_due', label: 'Reorder Due' },
+                  { id: 'first_time', label: 'High COD Risk' },
+                  { id: 'high_udhaar', label: 'Udhaar Overdue' },
+                  { id: 'loyal', label: 'Active Regulars' },
+                  { id: 'inactive', label: 'Lapsed VIPs' },
+                ].map((segTab) => (
+                  <button
+                    key={segTab.id}
+                    onClick={() => setCustSegment(segTab.id)}
+                    className={`px-3 py-1.5 font-semibold rounded-lg transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                      custSegment === segTab.id
+                        ? 'bg-white dark:bg-[#0066FF] text-[#0066FF] dark:text-white shadow-xs'
+                        : 'text-[#475569] dark:text-[#94A3B8] hover:text-[#0066FF] dark:hover:text-white'
+                    }`}
+                  >
+                    {segTab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Customer 360 Data Table */}
+              <div className="overflow-x-auto rounded-2xl border border-[#E2E8F0] dark:border-[#1E3A5F] bg-[#F8FAFC] dark:bg-[#0F1A2C]">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-white dark:bg-[#0B1320] border-b border-[#E2E8F0] dark:border-[#1E3A5F] text-[#64748B] dark:text-[#94A3B8] font-semibold">
+                      <th className="py-3 px-4">Customer</th>
+                      <th className="py-3 px-4">Location</th>
+                      <th className="py-3 px-4">Purchase Cycle</th>
+                      <th className="py-3 px-4">Favorite / Last SKU</th>
+                      <th className="py-3 px-4 text-right">Lifetime Spend</th>
+                      <th className="py-3 px-4 text-center">COD Reliability</th>
+                      <th className="py-3 px-4 text-right">Udhaar Balance</th>
+                      <th className="py-3 px-4 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E2E8F0] dark:divide-[#1E3A5F] bg-white dark:bg-[#132238] text-[#334155] dark:text-[#CBD5E1]">
+                    {customers
+                      .filter((c) => {
+                        if (custSegment !== 'all') {
+                          if (custSegment === 'loyal') {
+                            if (c.segment !== 'loyal' && c.segment !== 'regular') return false;
+                          } else if (c.segment !== custSegment) {
+                            return false;
+                          }
+                        }
+                        if (!custSearch.trim()) return true;
+                        const q = custSearch.toLowerCase();
+                        return (
+                          c.name.toLowerCase().includes(q) ||
+                          c.city.toLowerCase().includes(q) ||
+                          c.lastProductOrdered.toLowerCase().includes(q)
+                        );
+                      })
+                      .slice(0, 6)
+                      .map((cust) => (
+                        <tr
+                          key={cust.id}
+                          onClick={() => setSelectedCustomer(cust)}
+                          className="hover:bg-[#F0F9FF] dark:hover:bg-[#1A2E4C] transition-colors cursor-pointer"
+                        >
+                          <td className="py-3 px-4 font-bold text-[#0F1E36] dark:text-white">
+                            {cust.name}
+                          </td>
+                          <td className="py-3 px-4 text-[#64748B] dark:text-[#94A3B8]">
+                            {cust.city}, {cust.state}
+                          </td>
+                          <td className="py-3 px-4 font-mono tabular-nums">
+                            {cust.daysSinceLastOrder}d / {cust.averageOrderCadenceDays}d cycle
+                          </td>
+                          <td className="py-3 px-4 max-w-[200px] truncate">
+                            {cust.lastProductOrdered}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono font-bold tabular-nums text-[#0F1E36] dark:text-white">
+                            ₹{cust.totalSpent.toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-3 px-4 text-center font-mono tabular-nums">
+                            <span
+                              className={`font-bold ${
+                                cust.codReliabilityScore >= 80
+                                  ? 'text-[#16A34A]'
+                                  : cust.codReliabilityScore >= 60
+                                  ? 'text-[#D97706]'
+                                  : 'text-[#DC2626]'
+                              }`}
+                            >
+                              {cust.codReliabilityScore}%
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono font-semibold tabular-nums">
+                            <span
+                              className={
+                                cust.outstandingUdhaar > 0
+                                  ? 'text-[#DC2626]'
+                                  : 'text-[#64748B] dark:text-[#94A3B8]'
+                              }
+                            >
+                              {cust.outstandingUdhaar > 0
+                                ? `₹${cust.outstandingUdhaar.toLocaleString('en-IN')}`
+                                : '₹0'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedCustomer(cust);
+                              }}
+                              className="text-[#0066FF] dark:text-[#38BDF8] font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+                            >
+                              <span>Inspect</span>
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Customer 360 Slide-Over Drawer */}
+              {selectedCustomer && (
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex justify-end">
+                  <div className="bg-white dark:bg-[#0B1E40] w-full max-w-md h-full overflow-y-auto p-6 shadow-2xl border-l border-[#E2E8F0] dark:border-[#1E3A5F] flex flex-col justify-between space-y-5">
+                    <div className="space-y-4">
+                      <div className="flex items-start justify-between gap-3 pb-3 border-b border-[#E2E8F0] dark:border-[#1E3A5F]">
+                        <div>
+                          <div className="text-[11px] font-bold uppercase tracking-wider text-[#0066FF] dark:text-[#38BDF8]">
+                            Customer 360 Profile
+                          </div>
+                          <h4 className="text-lg font-extrabold text-[#0F1E36] dark:text-white">
+                            {selectedCustomer.name}
+                          </h4>
+                          <div className="flex flex-wrap items-center gap-3 text-xs text-[#64748B] dark:text-[#94A3B8] mt-1">
+                            <span className="flex items-center gap-1">
+                              <Phone className="w-3.5 h-3.5" /> {selectedCustomer.phone}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <MapPin className="w-3.5 h-3.5" /> {selectedCustomer.city},{' '}
+                              {selectedCustomer.state}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setSelectedCustomer(null)}
+                          className="p-1.5 rounded-lg hover:bg-[#F1F5F9] dark:hover:bg-[#132238] cursor-pointer"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="p-3 rounded-xl bg-[#F8FAFC] dark:bg-[#061533] border border-[#E2E8F0] dark:border-[#1E3A5F]">
+                          <div className="text-[#64748B] dark:text-[#94A3B8]">Lifetime Spend</div>
+                          <div className="text-base font-extrabold font-mono text-[#0F1E36] dark:text-white mt-0.5">
+                            ₹{selectedCustomer.totalSpent.toLocaleString('en-IN')}
+                          </div>
+                        </div>
+                        <div className="p-3 rounded-xl bg-[#F8FAFC] dark:bg-[#061533] border border-[#E2E8F0] dark:border-[#1E3A5F]">
+                          <div className="text-[#64748B] dark:text-[#94A3B8]">Outstanding Udhaar</div>
+                          <div
+                            className={`text-base font-extrabold font-mono mt-0.5 ${
+                              selectedCustomer.outstandingUdhaar > 0
+                                ? 'text-[#DC2626]'
+                                : 'text-[#0066FF] dark:text-[#38BDF8]'
+                            }`}
+                          >
+                            ₹{selectedCustomer.outstandingUdhaar.toLocaleString('en-IN')}
+                          </div>
+                        </div>
+                        <div className="p-3 rounded-xl bg-[#F8FAFC] dark:bg-[#061533] border border-[#E2E8F0] dark:border-[#1E3A5F]">
+                          <div className="text-[#64748B] dark:text-[#94A3B8] flex items-center gap-1">
+                            <Clock className="w-3 h-3" /> Purchase Cadence
+                          </div>
+                          <div className="text-sm font-bold font-mono text-[#0F1E36] dark:text-white mt-0.5">
+                            {selectedCustomer.daysSinceLastOrder}d /{' '}
+                            {selectedCustomer.averageOrderCadenceDays}d cycle
+                          </div>
+                        </div>
+                        <div className="p-3 rounded-xl bg-[#F8FAFC] dark:bg-[#061533] border border-[#E2E8F0] dark:border-[#1E3A5F]">
+                          <div className="text-[#64748B] dark:text-[#94A3B8]">COD Reliability</div>
+                          <div className="text-sm font-bold font-mono text-[#0F1E36] dark:text-white mt-0.5">
+                            {selectedCustomer.codReliabilityScore}% score
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-[#EFF6FF] dark:bg-[#061533] border border-[#BFDBFE] dark:border-[#1E3A5F] space-y-1 text-xs">
+                        <div className="font-bold text-[#0066FF] dark:text-[#38BDF8] flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>Customer Memory Graph & Insights</span>
+                        </div>
+                        <p className="text-[#334155] dark:text-[#CBD5E1] leading-relaxed">
+                          {selectedCustomer.aiInsightSummary || selectedCustomer.notes}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-[#E2E8F0] dark:border-[#1E3A5F] flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          const firstName = selectedCustomer.name.split(' ')[0];
+                          const customDraft =
+                            selectedCustomer.outstandingUdhaar > 0
+                              ? `Namaste ${firstName} ji! 🙏 Aapka ₹${selectedCustomer.outstandingUdhaar.toLocaleString(
+                                  'en-IN'
+                                )} ka monthly khata balance pending hai. Jab free hon tab UPI link se clear kar dein — Dhanyawad!`
+                              : `Namaste ${firstName} ji! 🙏 Aapka ${selectedCustomer.lastProductOrdered} stock fresh aaya hai. Kya hum repeat pack dispatch karein?`;
+                          setMessageText(customDraft);
+                          recordDraftHistory(
+                            customDraft,
+                            'Saved',
+                            selectedCustomer.outstandingUdhaar > 0 ? 'udhaar' : 'reorder'
+                          );
+                          setSelectedCustomer(null);
+                          onChangeTab('whatsapp');
+                        }}
+                        className="flex-1 py-2.5 px-4 bg-[#0066FF] hover:bg-[#0052CC] text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Draft Custom WhatsApp</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedCustomer(null);
+                          onOpenWorkspace('customers');
+                        }}
+                        className="py-2.5 px-3 border border-[#CBD5E1] dark:border-[#1E3A5F] text-xs font-bold rounded-xl cursor-pointer"
+                      >
+                        Full View
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

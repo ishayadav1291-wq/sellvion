@@ -3,6 +3,9 @@
 
 @layer base {
   :root {
+    --sellvion-navy: #071A35;
+    --sellvion-blue: #2563EB;
+    --sellvion-cyan: #22D3EE;
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     color-scheme: light dark;
   }
@@ -13,10 +16,51 @@
 
   code, kbd, samp, pre, .font-mono, .tabular-nums {
     font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  @keyframes agent-flow {
+    to {
+      stroke-dashoffset: -28;
+    }
+  }
+
+  .animate-agent-flow {
+    stroke-dasharray: 6 8;
+    animation: agent-flow 1.4s linear infinite;
+  }
+
+  .bg-spatial-grid {
+    background-image:
+      linear-gradient(to right, rgba(37, 99, 235, 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(37, 99, 235, 0.06) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .dark .bg-spatial-grid {
+    background-image:
+      linear-gradient(to right, rgba(34, 211, 238, 0.07) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(34, 211, 238, 0.07) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
-/* Custom scrollbars with Skyblue accents */
+/* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -25,9 +69,9 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(14, 165, 233, 0.25);
+  background: rgba(37, 99, 235, 0.28);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(14, 165, 233, 0.5);
+  background: rgba(37, 99, 235, 0.5);
 }

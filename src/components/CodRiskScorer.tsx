@@ -1,458 +1,479 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ShieldAlert,
-  ShieldCheck,
-  AlertTriangle,
+  CheckCircle2,
   Send,
-  Sparkles,
-  CheckCircle,
-  Truck,
-  RotateCcw,
-  ArrowRight,
+  AlertTriangle,
+  Calculator,
   X,
-  MapPin,
-  Package,
+  RefreshCw,
+  Eye,
+  Search,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
-import { Order } from '../types';
+import { AppLanguage, OrderRecord } from '../types';
+import { apiRequest } from '../lib/api';
+import { OrderDetailModal } from './workspace/OrderDetailModal';
+import { localizeOrderStatus, tr } from '../i18n/translations';
 
 interface CodRiskScorerProps {
-  orders: Order[];
-  onMitigateOrder?: (orderId: string, actionType: 'prepay' | 'verify') => void;
+  language?: AppLanguage;
+  orders: OrderRecord[];
+  onRefresh: () => void;
+  onNotify: (msg: string) => void;
+  compactLanding?: boolean;
 }
 
 export const CodRiskScorer: React.FC<CodRiskScorerProps> = ({
+  language = 'en',
   orders,
-  onMitigateOrder,
+  onRefresh,
+  onNotify,
+  compactLanding = false,
 }) => {
-  // Interactive Simulator inputs
-  const [simCustomerType, setSimCustomerType] = useState<'new' | 'repeat'>('new');
-  const [simPincode, setSimPincode] = useState<string>('141001');
-  const [simOrderAmount, setSimOrderAmount] = useState<number>(3800);
-  const [simAddressType, setSimAddressType] = useState<'complete' | 'missing_unit'>('missing_unit');
-  const [simTime, setSimTime] = useState<'day' | 'late_night'>('late_night');
-  const [simulatedScore, setSimulatedScore] = useState<{
+  const [filterStatus, setFilterStatus] = useState<
+    'all' | 'Pending_Verification' | 'In_Transit' | 'Delivered' | 'RTO_Returned'
+  >('all');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [calcOpen, setCalcOpen] = useState(false);
+  const [detailOrderId, setDetailOrderId] = useState<string | null>(null);
+
+  const [isFirstTimeBuyer, setIsFirstTimeBuyer] = useState(true);
+  const [pincode, setPincode] = useState('141001');
+  const [address, setAddress] = useState('Near Bus Stand, Ludhiana');
+  const [amount, setAmount] = useState(2850);
+  const [calcResult, setCalcResult] = useState<{
     score: number;
-    riskBand: 'High' | 'Moderate' | 'Low';
-    factors: string[];
-    recommendation: string;
+    band: string;
+    reasons: string[];
+    recommendedAction: string;
   } | null>(null);
 
-  const [activeMitigations, setActiveMitigations] = useState<Record<string, string>>({});
-  const [diagnosticOrder, setDiagnosticOrder] = useState<Order | null>(null);
+  useEffect(() => {
+    setPage(1);
+  }, [search, filterStatus]);
 
-  const calculateRisk = () => {
-    let score = 15; // baseline
-    const factors: string[] = [];
+  useEffect(() => {
+    if (!calcOpen || detailOrderId) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setCalcOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [calcOpen, detailOrderId]);
 
-    if (simCustomerType === 'new') {
-      score += 25;
-      factors.push('First-time buyer (+25% risk)');
-    } else {
-      score -= 10;
+  const PAGE_SIZE = 6;
+
+  const codOrders = orders.filter((o) => {
+    if (o.payment_mode !== 'COD') return false;
+    if (filterStatus !== 'all' && o.status !== filterStatus) return false;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      return (
+        o.order_number.toLowerCase().includes(q) ||
+        (o.customer_name || '').toLowerCase().includes(q) ||
+        (o.delivery_address || '').toLowerCase().includes(q) ||
+        (o.pincode || '').toLowerCase().includes(q)
+      );
     }
+    return true;
+  });
 
-    if (simPincode === '141001' || simPincode === '800001' || simPincode === '226001') {
-      score += 22;
-      factors.push(`Regional carrier RTO rate high in ${simPincode} (+22% risk)`);
+  const totalPages = Math.max(1, Math.ceil(codOrders.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const displayOrders = compactLanding
+    ? codOrders.slice(0, 3)
+    : codOrders.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  const flaggedCount = orders.filter(
+    (o) => o.payment_mode === 'COD' && o.status === 'Pending_Verification'
+  ).length;
+  const rtoCount = orders.filter(
+    (o) => o.payment_mode === 'COD' && o.status === 'RTO_Returned'
+  ).length;
+
+  const handleOrderAction = async (
+    orderId: string,
+    action: 'verify_address' | 'prepare_prepay' | 'escalate' | 'mark_delivered' | 'mark_rto'
+  ) => {
+    setBusyId(orderId);
+    try {
+      const res = await apiRequest<{ message: string }>(`/api/orders/${orderId}/action`, {
+        method: 'POST',
+        body: JSON.stringify({ action }),
+      });
+      onNotify(res.message);
+      onRefresh();
+    } catch (err: unknown) {
+      onNotify(
+        err instanceof Error ? err.message : tr(language, 'Action failed.', 'कार्रवाई विफल रही।')
+      );
+    } finally {
+      setBusyId(null);
     }
-
-    if (simOrderAmount > 2500) {
-      score += 15;
-      factors.push(`High cart value for COD (>₹2,500) (+15% risk)`);
-    }
-
-    if (simAddressType === 'missing_unit') {
-      score += 18;
-      factors.push('Address incomplete: missing flat/house/floor line (+18% risk)');
-    }
-
-    if (simTime === 'late_night') {
-      score += 10;
-      factors.push('Impulse late-night order (11:30 PM - 4:00 AM) (+10% risk)');
-    }
-
-    score = Math.min(Math.max(score, 8), 92);
-
-    let riskBand: 'High' | 'Moderate' | 'Low' = 'Low';
-    let recommendation = 'Safe for standard dispatch.';
-
-    if (score >= 60) {
-      riskBand = 'High';
-      recommendation = 'Hold dispatch. Trigger ₹75 UPI Prepayment Discount or WhatsApp Address Confirmation.';
-    } else if (score >= 35) {
-      riskBand = 'Moderate';
-      recommendation = 'Send WhatsApp order dispatch confirmation with 1-tap OTP verification.';
-    }
-
-    setSimulatedScore({
-      score,
-      riskBand,
-      factors,
-      recommendation,
-    });
   };
 
-  const handleMitigate = (orderId: string, actionType: 'prepay' | 'verify') => {
-    setActiveMitigations((prev) => ({
-      ...prev,
-      [orderId]: actionType === 'prepay' ? 'Prepay ₹50 link sent' : 'Address verification queued',
-    }));
-    if (onMitigateOrder) {
-      onMitigateOrder(orderId, actionType);
+  const handleScoreCheck = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await apiRequest<{
+        score: number;
+        band: string;
+        reasons: string[];
+        recommendedAction: string;
+      }>('/api/cod/score', {
+        method: 'POST',
+        body: JSON.stringify({ isFirstTimeBuyer, pincode, address, amount }),
+      });
+      setCalcResult(res);
+    } catch {
+      onNotify(
+        tr(language, 'Could not check order risk.', 'ऑर्डर जोखिम जांचा नहीं जा सका।')
+      );
     }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Title & Context */}
-      <div>
-        <div className="flex items-center gap-2 text-xs text-[#64748B] dark:text-[#94A3B8] mb-1">
-          <span>Predictive COD Risk Protection</span>
-          <span>·</span>
-          <span className="font-semibold text-[#0284C7] dark:text-[#38BDF8]">Indian E-Commerce RTO Defense</span>
-        </div>
-        <h2 className="text-2xl font-bold tracking-tight text-[#0F172A] dark:text-[#F8FAFC]">
-          COD RTO Protection Center
-        </h2>
-        <p className="text-sm text-[#475569] dark:text-[#94A3B8] mt-0.5">
-          In India, 20–30% of Cash-on-Delivery orders fail and return to origin, versus 2–3% prepaid. SELLVION detects risky orders and converts them to prepaid before couriers are booked.
-        </p>
-      </div>
-
-      {/* Key Metric Banners */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-[#132238] rounded-xl border border-[#E2E8F0] dark:border-[#1E3A5F] p-4 shadow-xs transition-colors">
-          <div className="text-xs text-[#64748B] dark:text-[#94A3B8] font-medium">Store COD Baseline RTO</div>
-          <div className="text-2xl font-bold text-[#DC2626] dark:text-[#F87171] font-mono tabular-nums mt-1">
-            26.4%
-          </div>
-          <div className="text-[11px] text-[#94A3B8] dark:text-[#64748B] mt-0.5">Industry avg: 20-30%</div>
-        </div>
-
-        <div className="bg-white dark:bg-[#132238] rounded-xl border border-[#E2E8F0] dark:border-[#1E3A5F] p-4 shadow-xs transition-colors">
-          <div className="text-xs text-[#64748B] dark:text-[#94A3B8] font-medium">Current AI-Protected RTO</div>
-          <div className="text-2xl font-bold text-[#0284C7] dark:text-[#38BDF8] font-mono tabular-nums mt-1">
-            11.8%
-          </div>
-          <div className="text-[11px] text-[#0284C7] dark:text-[#38BDF8] mt-0.5">-14.6% reduction in returns</div>
-        </div>
-
-        <div className="bg-white dark:bg-[#132238] rounded-xl border border-[#E2E8F0] dark:border-[#1E3A5F] p-4 shadow-xs transition-colors">
-          <div className="text-xs text-[#64748B] dark:text-[#94A3B8] font-medium">Courier Cost & Damage Saved</div>
-          <div className="text-2xl font-bold text-[#0284C7] dark:text-[#38BDF8] font-mono tabular-nums mt-1">
-            ₹1,42,800
-          </div>
-          <div className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-0.5">Saved in last 30 days</div>
-        </div>
-      </div>
-
-      {/* Flagged Live COD Orders Queue */}
-      <div className="bg-white dark:bg-[#132238] rounded-2xl border border-[#E2E8F0] dark:border-[#1E3A5F] p-6 shadow-xs space-y-4 transition-colors">
-        <div className="flex items-center justify-between">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-[#0B1E40] border border-[#CBD5E1] dark:border-[#1E3A5F] rounded-2xl p-4">
+        <div className="flex flex-wrap items-center gap-6 text-xs">
           <div>
-            <h3 className="text-base font-bold text-[#0F172A] dark:text-[#F8FAFC]">
-              Flagged COD Orders Requiring Action
-            </h3>
-            <p className="text-xs text-[#64748B] dark:text-[#94A3B8] mt-0.5">
-              Click any order to inspect carrier telemetry, address diagnostics, and trigger mitigations.
-            </p>
+            <div className="text-[#64748B] dark:text-[#94A3B8]">
+              {tr(language, 'COD Orders', 'कुल COD ऑर्डर')}
+            </div>
+            <div className="text-lg font-extrabold text-[#071A35] dark:text-white tabular-nums">
+              {orders.filter((o) => o.payment_mode === 'COD').length}
+            </div>
           </div>
-          <span className="text-xs text-[#0284C7] dark:text-[#38BDF8] font-semibold bg-[#E0F2FE] dark:bg-[#0C2E4E] px-2.5 py-1 rounded-md border border-[#BAE6FD] dark:border-[#1E3A5F]">
-            2 High Risk Orders
-          </span>
+          <div>
+            <div className="text-[#64748B] dark:text-[#94A3B8]">
+              {tr(language, 'Orders That May Be Returned', 'रिटर्न जोखिम वाले ऑर्डर')}
+            </div>
+            <div className="text-lg font-extrabold text-[#D97706] tabular-nums">{flaggedCount}</div>
+          </div>
+          <div>
+            <div className="text-[#64748B] dark:text-[#94A3B8]">
+              {tr(language, 'Returned Parcels', 'वापस आए पार्सल (RTO)')}
+            </div>
+            <div className="text-lg font-extrabold text-[#DC2626] tabular-nums">{rtoCount}</div>
+          </div>
+          <div className="text-[11px] text-[#64748B] dark:text-[#94A3B8] max-w-xs">
+            {tr(
+              language,
+              'Industry estimate: COD returns typically cost ~₹280 per order in two-way courier fees.',
+              'अनुमान: हर COD रिटर्न में आने-जाने का लगभग ₹280 कूरियर खर्च बर्बाद होता है।'
+            )}
+          </div>
         </div>
 
-        <div className="divide-y divide-[#F1F5F9] dark:divide-[#1E3A5F]">
-          {orders
-            .filter((o) => o.codRiskScore && o.codRiskScore >= 50)
-            .map((order) => {
-              const status = activeMitigations[order.id];
+        <div className="flex flex-wrap items-center gap-2">
+          {!compactLanding && (
+            <>
+              <div className="relative min-w-[180px]">
+                <Search className="w-3.5 h-3.5 text-[#64748B] absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={tr(language, 'Search COD order, buyer, pincode...', 'COD ऑर्डर, ग्राहक या पिनकोड खोजें...')}
+                  className="h-9 pl-8 pr-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-[#F8FAFC] dark:bg-[#061533] text-xs text-[#071A35] dark:text-white"
+                />
+              </div>
+              <select
+                aria-label={tr(language, 'Filter COD orders', 'COD ऑर्डर फ़िल्टर करें')}
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
+                className="h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-[#F8FAFC] dark:bg-[#061533] text-xs font-semibold text-[#071A35] dark:text-white"
+              >
+                <option value="all">{tr(language, 'All COD Orders', 'सभी COD ऑर्डर')}</option>
+                <option value="Pending_Verification">{tr(language, 'Needs Check', 'जांच बाकी')}</option>
+                <option value="In_Transit">{tr(language, 'In Transit', 'रास्ते में')}</option>
+                <option value="Delivered">{tr(language, 'Delivered', 'डिलीवर')}</option>
+                <option value="RTO_Returned">{tr(language, 'Returned (RTO)', 'रिटर्न (RTO)')}</option>
+              </select>
+            </>
+          )}
+          <button
+            onClick={() => setCalcOpen(true)}
+            className="h-9 px-3.5 rounded-lg bg-[#071A35] dark:bg-[#22D3EE] hover:bg-[#2563EB] text-white dark:text-[#071A35] text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+          >
+            <Calculator className="w-3.5 h-3.5" />
+            <span>{tr(language, 'Check Any Order', 'किसी ऑर्डर का जोखिम जांचें')}</span>
+          </button>
+        </div>
+      </div>
+
+      {displayOrders.length === 0 ? (
+        <div className="p-8 rounded-2xl border border-dashed border-[#CBD5E1] dark:border-[#1E3A5F] text-center text-sm text-[#64748B] dark:text-[#94A3B8]">
+          {tr(
+            language,
+            'No Cash-on-Delivery orders match this view yet.',
+            'इस श्रेणी में कोई COD ऑर्डर नहीं है।'
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="grid md:grid-cols-2 gap-4">
+            {displayOrders.map((order) => {
+              let reasons: string[] = [];
+              try {
+                reasons = JSON.parse(order.risk_reasons_json || '[]');
+              } catch {
+                reasons = [];
+              }
+              const score = Number(order.cod_risk_score || 0);
+              const riskLevel = score >= 60 ? 'high' : score >= 35 ? 'medium' : 'low';
+              const isPending = order.status === 'Pending_Verification';
 
               return (
                 <div
                   key={order.id}
-                  onClick={() => setDiagnosticOrder(order)}
-                  className="py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 hover:bg-[#F0F9FF] dark:hover:bg-[#1A2E4C] p-2 rounded-xl transition-colors cursor-pointer group"
+                  className="rounded-2xl border border-[#E2E8F0] dark:border-[#1E3A5F] bg-white dark:bg-[#0B1E40] p-5 flex flex-col justify-between gap-4 hover:border-[#2563EB] transition-colors"
                 >
-                  <div className="space-y-1.5 max-w-xl">
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="font-bold text-[#0F172A] dark:text-[#F8FAFC] group-hover:text-[#0284C7] dark:group-hover:text-[#38BDF8]">
-                        {order.id}
-                      </span>
-                      <span>·</span>
-                      <span className="font-medium text-[#334155] dark:text-[#CBD5E1]">{order.customerName}</span>
-                      <span>·</span>
-                      <span className="font-mono tabular-nums font-semibold text-[#0F172A] dark:text-[#F8FAFC]">
-                        ₹{order.amount.toLocaleString('en-IN')} (COD)
-                      </span>
-                    </div>
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-xs font-mono font-semibold text-[#64748B] dark:text-[#94A3B8]">
+                          {order.order_number} · {order.ordered_at}
+                        </div>
+                        <h4 className="text-base font-extrabold text-[#071A35] dark:text-white truncate">
+                          {order.customer_name || tr(language, 'Customer', 'ग्राहक')} · ₹
+                          {Number(order.total_amount).toLocaleString('en-IN')}
+                        </h4>
+                        <div className="text-xs text-[#64748B] dark:text-[#94A3B8] mt-0.5">
+                          {order.delivery_address || tr(language, 'Address missing', 'पता अधूरा')} (
+                          {order.pincode || tr(language, 'No pincode', 'पिनकोड नहीं')})
+                        </div>
+                      </div>
 
-                    <div className="text-xs text-[#64748B] dark:text-[#94A3B8]">
-                      Items: {order.items.join(', ')}
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 text-[11px]">
-                      {order.riskReasons?.map((r, i) => (
-                        <span
-                          key={i}
-                          className="bg-[#FEE2E2] dark:bg-[#3E1A1A] px-2 py-0.5 rounded text-[#991B1B] dark:text-[#F87171] font-medium"
+                      <div className="text-right shrink-0">
+                        <div
+                          className={`text-xs font-extrabold ${
+                            riskLevel === 'high'
+                              ? 'text-[#DC2626]'
+                              : riskLevel === 'medium'
+                              ? 'text-[#D97706]'
+                              : 'text-[#16A34A]'
+                          }`}
                         >
-                          {r}
-                        </span>
-                      ))}
+                          {riskLevel === 'high'
+                            ? `${tr(language, 'High Risk', 'उच्च जोखिम')} (${score})`
+                            : riskLevel === 'medium'
+                            ? `${tr(language, 'Needs Review', 'समीक्षा बाकी')} (${score})`
+                            : `${tr(language, 'Low Risk', 'कम जोखिम')} (${score})`}
+                        </div>
+                        <div className="text-[11px] font-semibold text-[#64748B] dark:text-[#94A3B8]">
+                          {localizeOrderStatus(language, order.status)}
+                        </div>
+                      </div>
                     </div>
+
+                    {reasons.length > 0 && (
+                      <ul className="space-y-1 text-xs text-[#475569] dark:text-[#CBD5E1] bg-[#F8FAFC] dark:bg-[#061533] rounded-xl p-3 border border-[#E2E8F0] dark:border-[#1E3A5F]">
+                        {reasons.slice(0, 3).map((r) => (
+                          <li key={r} className="flex items-start gap-2">
+                            <AlertTriangle className="w-3.5 h-3.5 text-[#D97706] shrink-0 mt-0.5" />
+                            <span>{r}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
 
-                  {/* Actions & Status */}
-                  <div className="flex items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <div className="text-right mr-2">
-                      <div className="text-sm font-bold font-mono text-[#DC2626] dark:text-[#F87171] tabular-nums">
-                        {order.codRiskScore}% RTO Risk
-                      </div>
-                      <div className="text-[10px] text-[#64748B] dark:text-[#94A3B8]">High return likelihood</div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#E2E8F0] dark:border-[#1E3A5F]">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {isPending ? (
+                        <>
+                          <button
+                            disabled={busyId === order.id}
+                            onClick={() => handleOrderAction(order.id, 'prepare_prepay')}
+                            className="h-9 px-3.5 rounded-lg bg-[#2563EB] hover:bg-[#071A35] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            <span>{tr(language, 'Prepare UPI Request', 'UPI अनुरोध तैयार करें')}</span>
+                          </button>
+                          <button
+                            disabled={busyId === order.id}
+                            onClick={() => handleOrderAction(order.id, 'verify_address')}
+                            className="h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] hover:border-[#16A34A] text-xs font-semibold text-[#071A35] dark:text-white flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 text-[#16A34A]" />
+                            <span>{tr(language, 'Verify Address', 'पता सत्यापित करें')}</span>
+                          </button>
+                        </>
+                      ) : (
+                        !compactLanding &&
+                        order.status === 'In_Transit' && (
+                          <>
+                            <button
+                              disabled={busyId === order.id}
+                              onClick={() => handleOrderAction(order.id, 'mark_delivered')}
+                              className="h-8 px-3 rounded-lg bg-[#16A34A] text-white text-xs font-bold cursor-pointer"
+                            >
+                              {tr(language, 'Mark Delivered', 'डिलीवर दर्ज करें')}
+                            </button>
+                            <button
+                              disabled={busyId === order.id}
+                              onClick={() => handleOrderAction(order.id, 'mark_rto')}
+                              className="h-8 px-3 rounded-lg border border-[#FCA5A5] text-[#DC2626] text-xs font-bold cursor-pointer"
+                            >
+                              {tr(language, 'Record Return', 'रिटर्न दर्ज करें')}
+                            </button>
+                          </>
+                        )
+                      )}
+                      {busyId === order.id && (
+                        <RefreshCw className="w-4 h-4 animate-spin text-[#2563EB]" />
+                      )}
                     </div>
 
-                    {status ? (
-                      <span className="px-3 py-1.5 text-xs font-semibold bg-[#E0F2FE] dark:bg-[#0C2E4E] text-[#0284C7] dark:text-[#38BDF8] rounded-lg border border-[#BAE6FD] dark:border-[#1E3A5F] flex items-center gap-1">
-                        <CheckCircle className="w-3.5 h-3.5" /> {status}
-                      </span>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleMitigate(order.id, 'verify')}
-                          className="px-3 py-2 text-xs font-medium text-[#0F172A] dark:text-[#F8FAFC] bg-white dark:bg-[#1B2E4B] border border-[#CBD5E1] dark:border-[#1E3A5F] hover:bg-[#F8FAFC] dark:hover:bg-[#233857] rounded-lg transition-colors cursor-pointer"
-                        >
-                          Verify Address
-                        </button>
-                        <button
-                          onClick={() => handleMitigate(order.id, 'prepay')}
-                          className="px-3.5 py-2 text-xs font-semibold text-white bg-[#0284C7] hover:bg-[#0369A1] rounded-lg transition-colors flex items-center gap-1.5 shadow-sm shadow-[#0284C7]/20 cursor-pointer"
-                        >
-                          <Sparkles className="w-3.5 h-3.5 text-[#BAE6FD]" />
-                          <span>Send ₹50 UPI Offer</span>
-                        </button>
-                      </div>
-                    )}
+                    <button
+                      onClick={() => setDetailOrderId(order.id)}
+                      className="h-8 px-2.5 rounded-lg text-xs font-bold text-[#2563EB] dark:text-[#22D3EE] hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>{tr(language, 'Details', 'विवरण')}</span>
+                    </button>
                   </div>
                 </div>
               );
             })}
-        </div>
-      </div>
-
-      {/* Interactive COD Risk Simulator */}
-      <div className="bg-[#F8FAFC] dark:bg-[#0F1A2C] rounded-2xl border border-[#E2E8F0] dark:border-[#1E3A5F] p-6 shadow-xs space-y-6 transition-colors">
-        <div>
-          <div className="flex items-center gap-2 text-xs text-[#64748B] dark:text-[#94A3B8] mb-1">
-            <span>Interactive Risk Calculator</span>
-            <span>·</span>
-            <span className="font-semibold text-[#0284C7] dark:text-[#38BDF8]">Explainable Scoring Sandbox</span>
-          </div>
-          <h3 className="text-lg font-bold text-[#0F172A] dark:text-[#F8FAFC]">
-            Test Any Indian Order for RTO Risk
-          </h3>
-          <p className="text-xs text-[#64748B] dark:text-[#94A3B8] mt-0.5">
-            Simulate how SELLVION factors geography, basket value, and buyer history to protect your cashflow.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div>
-            <label className="text-xs font-medium text-[#475569] dark:text-[#CBD5E1] block mb-1.5">
-              Buyer Relationship
-            </label>
-            <select
-              value={simCustomerType}
-              onChange={(e) => setSimCustomerType(e.target.value as any)}
-              className="w-full text-xs p-2.5 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#132238] text-[#0F172A] dark:text-[#F8FAFC] focus:outline-none focus:ring-1 focus:ring-[#0284C7] dark:focus:ring-[#38BDF8]"
-            >
-              <option value="new">First-Time Buyer (No history)</option>
-              <option value="repeat">Repeat Buyer (2+ completed orders)</option>
-            </select>
           </div>
 
-          <div>
-            <label className="text-xs font-medium text-[#475569] dark:text-[#CBD5E1] block mb-1.5">
-              Delivery Pincode
-            </label>
-            <select
-              value={simPincode}
-              onChange={(e) => setSimPincode(e.target.value)}
-              className="w-full text-xs p-2.5 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#132238] text-[#0F172A] dark:text-[#F8FAFC] focus:outline-none focus:ring-1 focus:ring-[#0284C7] dark:focus:ring-[#38BDF8]"
-            >
-              <option value="141001">141001 (Ludhiana - High RTO Tier)</option>
-              <option value="800001">800001 (Patna - High RTO Tier)</option>
-              <option value="226001">226001 (Lucknow - High RTO Tier)</option>
-              <option value="560034">560034 (Bengaluru - Low RTO Tier)</option>
-              <option value="411004">411004 (Pune - Low RTO Tier)</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-[#475569] dark:text-[#CBD5E1] block mb-1.5">
-              Address Quality
-            </label>
-            <select
-              value={simAddressType}
-              onChange={(e) => setSimAddressType(e.target.value as any)}
-              className="w-full text-xs p-2.5 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#132238] text-[#0F172A] dark:text-[#F8FAFC] focus:outline-none focus:ring-1 focus:ring-[#0284C7] dark:focus:ring-[#38BDF8]"
-            >
-              <option value="missing_unit">Missing House / Flat / Street line</option>
-              <option value="complete">Complete full address with landmark</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-[#475569] dark:text-[#CBD5E1] block mb-1.5">
-              Cart Value (COD)
-            </label>
-            <select
-              value={simOrderAmount}
-              onChange={(e) => setSimOrderAmount(Number(e.target.value))}
-              className="w-full text-xs p-2.5 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#132238] text-[#0F172A] dark:text-[#F8FAFC] focus:outline-none focus:ring-1 focus:ring-[#0284C7] dark:focus:ring-[#38BDF8]"
-            >
-              <option value={850}>₹850 (Low ticket)</option>
-              <option value={1950}>₹1,950 (Medium ticket)</option>
-              <option value={4200}>₹4,200 (High ticket)</option>
-              <option value={7500}>₹7,500 (Very high ticket)</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="flex justify-start">
-          <button
-            onClick={calculateRisk}
-            className="px-5 py-2.5 bg-[#0284C7] hover:bg-[#0369A1] text-white text-xs font-semibold rounded-xl transition-colors shadow-sm shadow-[#0284C7]/20 flex items-center gap-2 cursor-pointer"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-[#BAE6FD]" />
-            <span>Calculate Explainable Risk Score</span>
-          </button>
-        </div>
-
-        {/* Simulation Output */}
-        {simulatedScore && (
-          <div className="p-5 bg-white dark:bg-[#132238] rounded-xl border border-[#BAE6FD] dark:border-[#1E3A5F] space-y-3 animate-fadeIn transition-colors">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div
-                  className={`text-2xl font-bold font-mono tabular-nums ${
-                    simulatedScore.score >= 60
-                      ? 'text-[#DC2626] dark:text-[#F87171]'
-                      : simulatedScore.score >= 35
-                      ? 'text-[#D97706] dark:text-[#FBBF24]'
-                      : 'text-[#0284C7] dark:text-[#38BDF8]'
-                  }`}
+          {!compactLanding && totalPages > 1 && (
+            <div className="flex items-center justify-between text-xs text-[#64748B] pt-1">
+              <span className="tabular-nums">
+                {tr(language, 'Page', 'पृष्ठ')} {safePage} / {totalPages} · {codOrders.length}{' '}
+                {tr(language, 'COD orders', 'COD ऑर्डर')}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  disabled={safePage <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="h-8 px-2.5 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#0B1E40] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-40"
                 >
-                  {simulatedScore.score}% Risk Score
-                </div>
-                <span
-                  className={`px-2.5 py-0.5 rounded text-xs font-bold ${
-                    simulatedScore.riskBand === 'High'
-                      ? 'bg-[#FEE2E2] dark:bg-[#3E1A1A] text-[#991B1B] dark:text-[#F87171]'
-                      : simulatedScore.riskBand === 'Moderate'
-                      ? 'bg-[#FEF3C7] dark:bg-[#3D2906] text-[#92400E] dark:text-[#FBBF24]'
-                      : 'bg-[#E0F2FE] dark:bg-[#0C2E4E] text-[#0284C7] dark:text-[#38BDF8]'
-                  }`}
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span>{tr(language, 'Prev', 'पिछला')}</span>
+                </button>
+                <button
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="h-8 px-2.5 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#0B1E40] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-40"
                 >
-                  {simulatedScore.riskBand} COD Return Risk
-                </span>
+                  <span>{tr(language, 'Next', 'अगला')}</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
+          )}
+        </>
+      )}
 
-            <div className="text-xs text-[#334155] dark:text-[#CBD5E1] font-medium">
-              Identified Risk Indicators:
-            </div>
-            <ul className="list-disc list-inside text-xs text-[#64748B] dark:text-[#94A3B8] space-y-1">
-              {simulatedScore.factors.map((f, i) => (
-                <li key={i}>{f}</li>
-              ))}
-            </ul>
+      <OrderDetailModal
+        language={language}
+        orderId={detailOrderId}
+        onClose={() => setDetailOrderId(null)}
+        onRefresh={onRefresh}
+        onNotify={onNotify}
+      />
 
-            <div className="pt-2 border-t border-[#F1F5F9] dark:border-[#1E3A5F] flex items-center justify-between text-xs">
-              <span className="font-semibold text-[#0284C7] dark:text-[#38BDF8]">
-                Recommended Autonomous Action:
-              </span>
-              <span className="text-[#0369A1] dark:text-[#7DD3FC] font-medium">
-                {simulatedScore.recommendation}
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Dynamic Order Diagnostics Modal */}
-      {diagnosticOrder && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-white dark:bg-[#132238] rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-[#BAE6FD] dark:border-[#1E3A5F] space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0] dark:border-[#1E3A5F]">
+      {calcOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-[#0B1E40] border border-[#CBD5E1] dark:border-[#1E3A5F] p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Truck className="w-4 h-4 text-[#0284C7] dark:text-[#38BDF8]" />
-                <h3 className="text-base font-bold text-[#0F172A] dark:text-[#F8FAFC]">
-                  Order Diagnostics: #{diagnosticOrder.id}
+                <ShieldAlert className="w-5 h-5 text-[#2563EB] dark:text-[#22D3EE]" />
+                <h3 className="text-base font-extrabold text-[#071A35] dark:text-white">
+                  {tr(language, 'Check COD Return Risk', 'COD रिटर्न जोखिम जांचें')}
                 </h3>
               </div>
               <button
-                onClick={() => setDiagnosticOrder(null)}
-                className="p-1.5 text-[#64748B] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-white rounded-lg transition-colors cursor-pointer"
+                onClick={() => setCalcOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-[#F1F5F9] dark:hover:bg-[#061533] cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
-              <div className="p-3 bg-[#F8FAFC] dark:bg-[#0F1A2C] rounded-xl border border-[#E2E8F0] dark:border-[#1E3A5F] space-y-1.5">
-                <div className="flex justify-between">
-                  <span className="text-[#64748B] dark:text-[#94A3B8]">Buyer:</span>
-                  <span className="font-bold text-[#0F172A] dark:text-[#F8FAFC]">{diagnosticOrder.customerName}</span>
+            <form onSubmit={handleScoreCheck} className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold mb-1">
+                    {tr(language, 'Pincode', 'पिनकोड')}
+                  </label>
+                  <input
+                    value={pincode}
+                    onChange={(e) => setPincode(e.target.value)}
+                    className="w-full h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#061533]"
+                  />
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-[#64748B] dark:text-[#94A3B8]">Items:</span>
-                  <span className="text-[#0F172A] dark:text-[#F8FAFC]">{diagnosticOrder.items.join(', ')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#64748B] dark:text-[#94A3B8]">COD Amount:</span>
-                  <span className="font-mono font-bold text-[#0F172A] dark:text-[#F8FAFC]">₹{diagnosticOrder.amount.toLocaleString('en-IN')}</span>
-                </div>
-                <div className="flex justify-between font-bold">
-                  <span className="text-[#DC2626] dark:text-[#F87171]">Calculated RTO Risk:</span>
-                  <span className="text-[#DC2626] dark:text-[#F87171] font-mono">{diagnosticOrder.codRiskScore}% High Risk</span>
+                <div>
+                  <label className="block font-semibold mb-1">
+                    {tr(language, 'Order Amount (₹)', 'ऑर्डर राशि (₹)')}
+                  </label>
+                  <input
+                    type="number"
+                    value={amount}
+                    onChange={(e) => setAmount(Number(e.target.value))}
+                    className="w-full h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#061533]"
+                  />
                 </div>
               </div>
-
               <div>
-                <span className="font-semibold text-[#475569] dark:text-[#CBD5E1] block mb-1">
-                  Identified Carrier Risk Factors:
-                </span>
-                <ul className="list-disc list-inside space-y-1 text-[#64748B] dark:text-[#94A3B8]">
-                  {diagnosticOrder.riskReasons?.map((r, i) => (
-                    <li key={i}>{r}</li>
-                  ))}
-                  <li>Courier return cost exposure: <strong>₹280 forward + reverse transit loss</strong></li>
-                </ul>
+                <label className="block font-semibold mb-1">
+                  {tr(language, 'Delivery Address', 'डिलीवरी पता')}
+                </label>
+                <input
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className="w-full h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#061533]"
+                />
               </div>
-            </div>
+              <label className="flex items-center gap-2 font-medium cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isFirstTimeBuyer}
+                  onChange={(e) => setIsFirstTimeBuyer(e.target.checked)}
+                />
+                <span>
+                  {tr(
+                    language,
+                    'First-time buyer (no prior delivered orders)',
+                    'नया ग्राहक (पहले कोई डिलीवर ऑर्डर नहीं)'
+                  )}
+                </span>
+              </label>
+              <button
+                type="submit"
+                className="w-full h-10 rounded-lg bg-[#2563EB] hover:bg-[#071A35] text-white font-bold cursor-pointer"
+              >
+                {tr(language, 'Check Risk', 'जोखिम जांचें')}
+              </button>
+            </form>
 
-            <div className="flex justify-end gap-2 pt-3 border-t border-[#E2E8F0] dark:border-[#1E3A5F]">
-              <button
-                onClick={() => {
-                  handleMitigate(diagnosticOrder.id, 'verify');
-                  setDiagnosticOrder(null);
-                }}
-                className="px-3.5 py-2 text-xs font-medium text-[#0F172A] dark:text-[#F8FAFC] bg-white dark:bg-[#1B2E4B] border border-[#CBD5E1] dark:border-[#1E3A5F] rounded-xl hover:bg-[#F8FAFC] cursor-pointer"
-              >
-                Queue Address Verification
-              </button>
-              <button
-                onClick={() => {
-                  handleMitigate(diagnosticOrder.id, 'prepay');
-                  setDiagnosticOrder(null);
-                }}
-                className="px-4 py-2 bg-[#0284C7] hover:bg-[#0369A1] text-white text-xs font-semibold rounded-xl shadow-sm shadow-[#0284C7]/20 flex items-center gap-1.5 cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-[#BAE6FD]" />
-                <span>Send ₹50 UPI Prepay Offer</span>
-              </button>
-            </div>
+            {calcResult && (
+              <div className="p-4 rounded-xl bg-[#EFF6FF] dark:bg-[#061533] border border-[#BFDBFE] dark:border-[#1E3A5F] space-y-2 text-xs">
+                <div className="font-extrabold text-sm">
+                  {calcResult.band === 'high'
+                    ? `${tr(language, 'High Risk', 'उच्च जोखिम')} (${calcResult.score}/100)`
+                    : calcResult.band === 'medium'
+                    ? `${tr(language, 'Needs Review', 'समीक्षा बाकी')} (${calcResult.score}/100)`
+                    : `${tr(language, 'Low Risk', 'कम जोखिम')} (${calcResult.score}/100)`}
+                </div>
+                <p className="font-semibold text-[#071A35] dark:text-white">
+                  {calcResult.recommendedAction}
+                </p>
+                {calcResult.reasons.length > 0 && (
+                  <ul className="list-disc pl-4 space-y-1 text-[#475569] dark:text-[#CBD5E1]">
+                    {calcResult.reasons.map((r) => (
+                      <li key={r}>{r}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

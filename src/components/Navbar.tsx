@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { Sun, Moon, ChevronDown, ArrowRight } from 'lucide-react';
 import { ProductTourTab } from './ProductTour';
+import { ConsoleTabId } from '../types';
 
 interface NavbarProps {
-  onOpenConsole: (view?: string) => void;
+  onOpenConsole: (view?: ConsoleTabId) => void;
+  onOpenAuth?: (mode: 'login' | 'signup') => void;
   onSelectTourTab?: (tab: ProductTourTab) => void;
   pendingCount: number;
   theme: 'light' | 'dark';
@@ -12,6 +14,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({
   onOpenConsole,
+  onOpenAuth,
   onSelectTourTab,
   pendingCount,
   theme,
@@ -118,6 +121,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <div className="font-semibold">Monthly Savings Estimator</div>
                   <div className="text-[11px] text-[#64748B]">Calculate return & reorder gains</div>
                 </button>
+
+                <button
+                  onClick={() => jumpToFeature('customers')}
+                  className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-[#F0F9FF] dark:hover:bg-[#1A2E4C] text-[#0F172A] dark:text-[#F8FAFC] cursor-pointer"
+                >
+                  <div className="font-semibold">Customer 360</div>
+                  <div className="text-[11px] text-[#64748B]">Purchase cycles, COD & Udhaar profiles</div>
+                </button>
               </div>
             )}
           </div>
@@ -163,7 +174,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
 
           <button
-            onClick={() => onOpenConsole('inbox')}
+            onClick={() => (onOpenAuth ? onOpenAuth('login') : onOpenConsole('inbox'))}
             className="px-4 py-2 text-xs font-semibold text-[#0F1E36] dark:text-[#F8FAFC] bg-white dark:bg-[#132238] border border-[#CBD5E1] dark:border-[#1E3A5F] hover:border-[#0066FF] dark:hover:border-[#38BDF8] rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
           >
             <span>Login</span>
@@ -173,7 +184,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
 
           <button
-            onClick={() => onOpenConsole('inbox')}
+            onClick={() => onOpenConsole('agents')}
             className="px-4 py-2 text-xs font-bold text-white bg-[#0066FF] hover:bg-[#0052CC] rounded-xl shadow-md shadow-[#0066FF]/25 hover:shadow-lg transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
           >
             <span>Get Started Free</span>
@@ -194,7 +205,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           Pricing
         </a>
         <button
-          onClick={() => onOpenConsole('inbox')}
+          onClick={() => onOpenConsole('agents')}
           className="px-3 py-1 rounded-full bg-[#EAF2FF] text-[#0066FF] font-bold shrink-0 ml-auto cursor-pointer"
         >
           Workspace ({pendingCount})

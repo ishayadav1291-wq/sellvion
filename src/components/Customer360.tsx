@@ -1,615 +1,924 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
-  User,
-  ShoppingBag,
-  Clock,
-  ShieldAlert,
-  CreditCard,
-  ChevronRight,
+  UserPlus,
   X,
-  Send,
-  Sparkles,
-  MapPin,
   Phone,
+  MapPin,
+  ShoppingBag,
+  MessageSquare,
+  ShieldOff,
+  Check,
+  Sparkles,
+  IndianRupee,
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+  Upload,
   CheckCircle2,
-  Plus,
-  ArrowRight,
-  AlertCircle,
+  RefreshCw,
+  AlertTriangle,
 } from 'lucide-react';
-import { Customer, CustomerSegment } from '../types';
+import {
+  AppLanguage,
+  ConsoleTabId,
+  CustomerRecord,
+  CustomerSegment,
+  CustomerTimelineEvent,
+} from '../types';
+import { apiRequest } from '../lib/api';
+import { localizeWorkflowStatus, tr } from '../i18n/translations';
 
 interface Customer360Props {
-  customers: Customer[];
-  onOpenDraftModal?: (customer: Customer) => void;
-  onAddCustomer?: (newCustomer: Customer) => void;
+  language?: AppLanguage;
+  customers: CustomerRecord[];
+  onRefresh: () => void;
+  onNotify: (msg: string) => void;
+  onOpenInbox: () => void;
+  onNavigateTab?: (tab: ConsoleTabId) => void;
+  compactLanding?: boolean;
+  initialCustomerId?: string | null;
+  onClearInitialCustomer?: () => void;
 }
 
+interface CustomerDetailPayload {
+  customer: CustomerRecord;
+  orders: Array<{
+    id: string;
+    order_number: string;
+    total_amount: number;
+    payment_mode: string;
+    status: string;
+    ordered_at: string;
+  }>;
+  payments: Array<{
+    id: string;
+    amount: number;
+    method: string;
+    reference_id: string;
+    paid_at: string;
+  }>;
+  messages: Array<{
+    id: string;
+    direction: string;
+    body: string;
+    status: string;
+    created_at: string;
+  }>;
+  timeline?: CustomerTimelineEvent[];
+}
+
+type StatusIconKind = 'clock' | 'check' | 'refresh' | 'alert' | 'sparkles';
+
+function getStatusDisplay(
+  lang: AppLanguage,
+  segment: CustomerSegment,
+  outstandingUdhaar: number
+): {
+  label: string;
+  icon: StatusIconKind;
+  textColor: string;
+} {
+  if (outstandingUdhaar > 0 || segment === 'high_udhaar') {
+    return {
+      label: tr(lang, 'Payment Pending', 'भुगतान बाकी'),
+      icon: 'clock',
+      textColor: 'text-[#D97706]',
+    };
+  }
+  switch (segment) {
+    case 'loyal':
+      return {
+        label: tr(lang, 'Loyal Buyer', 'नियमित ग्राहक'),
+        icon: 'check',
+        textColor: 'text-[#16A34A]',
+      };
+    case 'reorder_due':
+      return {
+        label: tr(lang, 'Reorder Due', 'रीऑर्डर का समय'),
+        icon: 'refresh',
+        textColor: 'text-[#2563EB] dark:text-[#22D3EE]',
+      };
+    case 'at_risk':
+      return {
+        label: tr(lang, 'Needs Attention', 'ध्यान दें'),
+        icon: 'alert',
+        textColor: 'text-[#DC2626]',
+      };
+    case 'inactive':
+      return {
+        label: tr(lang, 'Inactive', 'निष्क्रिय'),
+        icon: 'clock',
+        textColor: 'text-[#D97706]',
+      };
+    case 'first_time':
+      return {
+        label: tr(lang, 'First-Time Buyer', 'नया ग्राहक'),
+        icon: 'sparkles',
+        textColor: 'text-[#2563EB] dark:text-[#22D3EE]',
+      };
+    default:
+      return {
+        label: tr(lang, 'Regular', 'सामान्य'),
+        icon: 'check',
+        textColor: 'text-[#16A34A]',
+      };
+  }
+}
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return parts.length >= 2
+    ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+    : name.slice(0, 2).toUpperCase();
+}
+
+const PAGE_SIZE = 8;
+
 export const Customer360: React.FC<Customer360Props> = ({
+  language = 'en',
   customers,
-  onOpenDraftModal,
-  onAddCustomer,
+  onRefresh,
+  onNotify,
+  onOpenInbox,
+  onNavigateTab,
+  compactLanding = false,
+  initialCustomerId = null,
+  onClearInitialCustomer,
 }) => {
-  const [searchTerm, setSearchTerm] = useState<string>('');
-  const [selectedSegment, setSelectedSegment] = useState<string>('all');
-  const [activeCustomer, setActiveCustomer] = useState<Customer | null>(null);
-  const [isAddCustomerOpen, setIsAddCustomerOpen] = useState<boolean>(false);
+  const [search, setSearch] = useState('');
+  const [segment, setSegment] = useState('all');
+  const [sort, setSort] = useState('recent');
+  const [page, setPage] = useState(1);
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [drawerData, setDrawerData] = useState<CustomerDetailPayload | null>(null);
+  const [loadingDrawer, setLoadingDrawer] = useState(false);
 
-  // New Customer Form State
   const [newName, setNewName] = useState('');
-  const [newPhone, setNewPhone] = useState('+91 ');
+  const [newPhone, setNewPhone] = useState('');
   const [newCity, setNewCity] = useState('');
-  const [newState, setNewState] = useState('Maharashtra');
   const [newProduct, setNewProduct] = useState('');
-  const [newCadence, setNewCadence] = useState<number>(30);
-  const [newUdhaar, setNewUdhaar] = useState<number>(0);
+  const [newCadence, setNewCadence] = useState(30);
+  const [newUdhaar, setNewUdhaar] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [orderOpen, setOrderOpen] = useState(false);
+  const [orderItemName, setOrderItemName] = useState('');
+  const [orderAmount, setOrderAmount] = useState(1150);
+  const [recordingOrder, setRecordingOrder] = useState(false);
 
-  const filteredCustomers = customers.filter((cust) => {
-    const matchesSearch =
-      cust.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cust.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cust.lastProductOrdered.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cust.phone.includes(searchTerm);
-
-    if (!matchesSearch) return false;
-    if (selectedSegment === 'all') return true;
-    return cust.segment === selectedSegment;
-  });
-
-  const getSegmentLabel = (segment: CustomerSegment) => {
-    switch (segment) {
-      case 'reorder_due':
-        return { label: 'Reorder Window Open', color: 'text-[#0284C7] dark:text-[#38BDF8]' };
-      case 'first_time':
-        return { label: 'First Time (COD Risk)', color: 'text-[#D97706] dark:text-[#FBBF24]' };
-      case 'high_udhaar':
-        return { label: 'Pending Khata / Udhaar', color: 'text-[#DC2626] dark:text-[#F87171]' };
-      case 'inactive':
-        return { label: 'Lapsed VIP (>90d)', color: 'text-[#64748B] dark:text-[#94A3B8]' };
-      case 'regular':
-        return { label: 'Active Regular', color: 'text-[#0284C7] dark:text-[#38BDF8]' };
-      default:
-        return { label: 'Customer', color: 'text-[#64748B] dark:text-[#94A3B8]' };
+  const openCustomerDrawer = async (customerId: string) => {
+    setLoadingDrawer(true);
+    try {
+      const data = await apiRequest<CustomerDetailPayload>(`/api/customers/${customerId}`);
+      setDrawerData(data);
+    } catch (err: unknown) {
+      onNotify(
+        err instanceof Error
+          ? err.message
+          : tr(language, 'Failed to load customer timeline.', 'ग्राहक विवरण लोड नहीं हो सका।')
+      );
+    } finally {
+      setLoadingDrawer(false);
     }
   };
 
-  const handleCreateCustomer = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newName.trim()) return;
-
-    const newCust: Customer = {
-      id: `CUST-${Math.floor(1000 + Math.random() * 9000)}`,
-      name: newName.trim(),
-      phone: newPhone.trim(),
-      city: newCity.trim() || 'Mumbai',
-      state: newState,
-      firstOrderDate: new Date().toISOString().split('T')[0],
-      lastOrderDate: new Date().toISOString().split('T')[0],
-      totalOrders: 1,
-      totalSpent: 1850,
-      averageOrderCadenceDays: newCadence || 30,
-      daysSinceLastOrder: 2,
-      primaryCategory: 'Retail',
-      lastProductOrdered: newProduct.trim() || 'Assam CTC Golden Blend (1kg)',
-      segment: newUdhaar > 0 ? 'high_udhaar' : 'regular',
-      codReliabilityScore: 85,
-      outstandingUdhaar: newUdhaar,
-      consentWhatsApp: true,
-      notes: 'Customer added via manual merchant khata register.',
-      aiInsightSummary: 'New customer profile registered. Cadence monitor initialized.',
-    };
-
-    if (onAddCustomer) {
-      onAddCustomer(newCust);
+  useEffect(() => {
+    if (initialCustomerId) {
+      openCustomerDrawer(initialCustomerId);
+      onClearInitialCustomer?.();
     }
+  }, [initialCustomerId]);
 
-    setIsAddCustomerOpen(false);
-    // Reset Form
-    setNewName('');
-    setNewPhone('+91 ');
-    setNewCity('');
-    setNewProduct('');
-    setNewUdhaar(0);
+  useEffect(() => {
+    setPage(1);
+  }, [search, segment, sort]);
+
+  useEffect(() => {
+    if (!drawerData && !addModalOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setDrawerData(null);
+        setAddModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [drawerData, addModalOpen]);
+
+  const filtered = customers
+    .filter((c) => {
+      if (segment !== 'all' && c.segment !== segment) return false;
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        return (
+          c.name.toLowerCase().includes(q) ||
+          c.city.toLowerCase().includes(q) ||
+          c.phone.toLowerCase().includes(q) ||
+          c.last_product_ordered.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (sort === 'spent_desc') return b.total_spent - a.total_spent;
+      if (sort === 'udhaar_desc') return b.outstanding_udhaar - a.outstanding_udhaar;
+      if (sort === 'inactive_desc') return b.days_since_last_order - a.days_since_last_order;
+      return a.name.localeCompare(b.name);
+    });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const displayList = compactLanding
+    ? filtered.slice(0, 4)
+    : filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  const handleToggleOptOut = async (customer: CustomerRecord) => {
+    try {
+      const nextOptOut = customer.opted_out === 0;
+      await apiRequest(`/api/customers/${customer.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ optedOut: nextOptOut, consentWhatsApp: !nextOptOut }),
+      });
+      onNotify(
+        nextOptOut
+          ? tr(
+              language,
+              `${customer.name} opted out. Future sends are blocked automatically.`,
+              `${customer.name} ऑप्ट-आउट हो गए। आगे संदेश अपने आप रुक जाएंगे।`
+            )
+          : tr(
+              language,
+              `${customer.name} WhatsApp consent enabled.`,
+              `${customer.name} के लिए WhatsApp सहमति चालू हो गई।`
+            )
+      );
+      onRefresh();
+      if (drawerData?.customer.id === customer.id) {
+        openCustomerDrawer(customer.id);
+      }
+    } catch (err: unknown) {
+      onNotify(err instanceof Error ? err.message : tr(language, 'Update failed.', 'अपडेट विफल रहा।'));
+    }
+  };
+
+  const handlePrepareFollowup = async (customerId: string) => {
+    try {
+      const res = await apiRequest<{ message: string }>('/api/workflows/run', {
+        method: 'POST',
+        body: JSON.stringify({ workflowType: 'reactivation', targetCustomerId: customerId }),
+      });
+      onNotify(res.message);
+      onRefresh();
+      onOpenInbox();
+    } catch (err: unknown) {
+      onNotify(
+        err instanceof Error
+          ? err.message
+          : tr(language, 'Could not prepare follow-up.', 'संदेश तैयार नहीं हो सका।')
+      );
+    }
+  };
+
+  const handleRecordRepeatOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!drawerData) return;
+    setRecordingOrder(true);
+    try {
+      const itemLabel =
+        orderItemName.trim() || drawerData.customer.last_product_ordered || 'Repeat Pack';
+      await apiRequest('/api/orders', {
+        method: 'POST',
+        body: JSON.stringify({
+          customerId: drawerData.customer.id,
+          items: [itemLabel],
+          totalAmount: Math.max(1, Number(orderAmount || 1000)),
+          paymentMode: 'Prepaid_UPI',
+        }),
+      });
+      setOrderOpen(false);
+      onNotify(
+        tr(
+          language,
+          `Repeat order recorded for ${drawerData.customer.name}.`,
+          `${drawerData.customer.name} के लिए नया रीऑर्डर दर्ज हो गया।`
+        )
+      );
+      onRefresh();
+      openCustomerDrawer(drawerData.customer.id);
+    } catch (err: unknown) {
+      onNotify(
+        err instanceof Error ? err.message : tr(language, 'Could not record order.', 'ऑर्डर दर्ज नहीं हो सका।')
+      );
+    } finally {
+      setRecordingOrder(false);
+    }
+  };
+
+  const handleAddSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      await apiRequest('/api/customers', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: newName,
+          phone: newPhone,
+          city: newCity,
+          lastProductOrdered: newProduct,
+          averageCadenceDays: newCadence,
+          outstandingUdhaar: newUdhaar,
+        }),
+      });
+      setAddModalOpen(false);
+      setNewName('');
+      setNewPhone('');
+      setNewCity('');
+      setNewProduct('');
+      setNewUdhaar(0);
+      onNotify(tr(language, `Customer ${newName} added.`, `ग्राहक ${newName} जुड़ गया।`));
+      onRefresh();
+    } catch (err: unknown) {
+      onNotify(
+        err instanceof Error
+          ? err.message
+          : tr(language, 'Failed to create customer.', 'ग्राहक जोड़ने में त्रुटि हुई।')
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Title & Actions */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-xs text-[#64748B] dark:text-[#94A3B8] mb-1">
-            <span>Customer Intelligence Graph</span>
-            <span>·</span>
-            <span className="font-semibold text-[#0284C7] dark:text-[#38BDF8]">RFM Cadence & Udhaar Memory</span>
+    <div className="space-y-4">
+      {!compactLanding && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="text-xs font-semibold text-[#2563EB] dark:text-[#22D3EE]">
+              {tr(
+                language,
+                'Customer Intelligence Graph · RFM Cadence & Udhaar Memory',
+                'ग्राहक इंटेलिजेंस ग्राफ · रीऑर्डर चक्र और उधार मेमोरी'
+              )}
+            </div>
+            <h2 className="text-xl font-extrabold text-[#071A35] dark:text-white tracking-tight">
+              {tr(language, 'Customer 360', 'ग्राहक 360')}
+            </h2>
           </div>
-          <h2 className="text-2xl font-bold tracking-tight text-[#0F172A] dark:text-white">
-            Customer 360
-          </h2>
-          <p className="text-sm text-[#64748B] dark:text-[#94A3B8] mt-0.5">
-            Unified purchase memory, reorder rhythms, and COD reliability across all channels.
-          </p>
+          <span className="text-xs text-[#64748B] dark:text-[#94A3B8] tabular-nums">
+            {filtered.length} {tr(language, 'profiles tracked', 'प्रोफ़ाइल ट्रैक')}
+          </span>
         </div>
+      )}
 
-        <div className="flex items-center gap-3">
-          {/* Search Input */}
-          <div className="relative w-full md:w-64">
-            <Search className="w-4 h-4 text-[#94A3B8] absolute left-3 top-1/2 -translate-y-1/2" />
+      {/* Controls */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-[#0B1E40] border border-[#E2E8F0] dark:border-[#1E3A5F] rounded-2xl p-4">
+        <div className="flex flex-wrap items-center gap-2.5 flex-1">
+          <div className="relative flex-1 min-w-[200px] max-w-xs">
+            <Search className="w-4 h-4 text-[#64748B] absolute left-3 top-1/2 -translate-y-1/2" />
             <input
-              type="text"
-              placeholder="Search name, city, SKU..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-xs bg-white dark:bg-[#132238] border border-[#E2E8F0] dark:border-[#1E293B] rounded-xl text-[#0F172A] dark:text-[#F8FAFC] placeholder-[#94A3B8] focus:outline-none focus:ring-1 focus:ring-[#0284C7] focus:border-[#0284C7] shadow-2xs"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={tr(
+                language,
+                'Search name, city, phone, product...',
+                'नाम, शहर, फोन या उत्पाद खोजें...'
+              )}
+              className="w-full h-9 pl-9 pr-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-[#F8FAFC] dark:bg-[#061533] text-xs"
             />
           </div>
-
-          <button
-            onClick={() => setIsAddCustomerOpen(true)}
-            className="px-3.5 py-2 bg-[#0284C7] hover:bg-[#0369A1] text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-sm shadow-[#0284C7]/20 whitespace-nowrap shrink-0 cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5 text-[#BAE6FD]" />
-            <span>Add Customer</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Segment Filter Bar */}
-      <div className="flex items-center gap-1.5 p-1 bg-[#E0F2FE] dark:bg-[#1E293B] rounded-xl overflow-x-auto text-xs">
-        {[
-          { id: 'all', label: 'All Customers' },
-          { id: 'reorder_due', label: 'Reorder Due' },
-          { id: 'first_time', label: 'High COD Risk' },
-          { id: 'high_udhaar', label: 'Udhaar Overdue' },
-          { id: 'regular', label: 'Active Regulars' },
-          { id: 'inactive', label: 'Lapsed VIPs' },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setSelectedSegment(tab.id)}
-            className={`px-3 py-1.5 font-medium rounded-lg transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-              selectedSegment === tab.id
-                ? 'bg-white dark:bg-[#0284C7] text-[#0284C7] dark:text-white shadow-xs font-semibold'
-                : 'text-[#0369A1] dark:text-[#94A3B8] hover:text-[#0284C7] dark:hover:text-white'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Mobile Card Stack View (<768px) - Fixes Mobile Con */}
-      <div className="block md:hidden space-y-3">
-        {filteredCustomers.length === 0 ? (
-          <div className="p-6 text-center text-xs text-[#64748B] dark:text-[#94A3B8] bg-white dark:bg-[#132238] rounded-xl border border-[#E2E8F0] dark:border-[#1E3A5F]">
-            No customers found.
-          </div>
-        ) : (
-          filteredCustomers.map((cust) => {
-            const seg = getSegmentLabel(cust.segment);
-            return (
-              <div
-                key={cust.id}
-                onClick={() => setActiveCustomer(cust)}
-                className="p-4 bg-white dark:bg-[#132238] rounded-xl border border-[#E2E8F0] dark:border-[#1E3A5F] shadow-xs space-y-2.5 active:bg-[#F0F9FF] dark:active:bg-[#192E4D] transition-colors cursor-pointer"
+          {!compactLanding && (
+            <>
+              <select
+                aria-label={tr(language, 'Filter customer group', 'ग्राहक वर्ग चुनें')}
+                value={segment}
+                onChange={(e) => setSegment(e.target.value)}
+                className="h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-[#F8FAFC] dark:bg-[#061533] text-xs font-semibold"
               >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-bold text-sm text-[#0F172A] dark:text-[#F8FAFC]">
-                      {cust.name}
-                    </div>
-                    <div className={`text-[11px] font-medium ${seg.color}`}>
-                      {seg.label}
-                    </div>
-                  </div>
-                  <span className="text-xs font-mono tabular-nums font-bold text-[#0F172A] dark:text-[#F8FAFC]">
-                    ₹{cust.totalSpent.toLocaleString('en-IN')}
-                  </span>
-                </div>
+                <option value="all">{tr(language, 'All Customers', 'सभी ग्राहक')}</option>
+                <option value="reorder_due">{tr(language, 'Reorder Due', 'रीऑर्डर का समय')}</option>
+                <option value="inactive">{tr(language, 'Inactive', 'निष्क्रिय')}</option>
+                <option value="high_udhaar">{tr(language, 'Payment Pending', 'भुगतान बाकी')}</option>
+                <option value="first_time">{tr(language, 'First-Time Buyer', 'नए ग्राहक')}</option>
+                <option value="loyal">{tr(language, 'Loyal Buyer', 'नियमित ग्राहक')}</option>
+              </select>
+              <select
+                aria-label={tr(language, 'Sort customers', 'ग्राहक क्रम')}
+                value={sort}
+                onChange={(e) => setSort(e.target.value)}
+                className="h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-[#F8FAFC] dark:bg-[#061533] text-xs font-semibold"
+              >
+                <option value="recent">{tr(language, 'Sort: Name', 'क्रम: नाम')}</option>
+                <option value="spent_desc">{tr(language, 'Highest Spend', 'सबसे अधिक खर्च')}</option>
+                <option value="udhaar_desc">{tr(language, 'Highest Pending Payment', 'सबसे अधिक उधार')}</option>
+                <option value="inactive_desc">
+                  {tr(language, 'Longest Since Last Order', 'सबसे पुराना ऑर्डर')}
+                </option>
+              </select>
+            </>
+          )}
+        </div>
 
-                <div className="grid grid-cols-2 gap-2 text-[11px] text-[#64748B] dark:text-[#94A3B8] pt-1 border-t border-[#F1F5F9] dark:border-[#1E3A5F]">
-                  <div>
-                    <span className="text-[#94A3B8] block text-[10px]">Cadence</span>
-                    <span className="font-mono text-[#0F172A] dark:text-[#F8FAFC]">
-                      {cust.daysSinceLastOrder}d / {cust.averageOrderCadenceDays}d
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[#94A3B8] block text-[10px]">Udhaar Balance</span>
-                    <span className={`font-mono font-semibold ${cust.outstandingUdhaar > 0 ? 'text-[#DC2626] dark:text-[#F87171]' : 'text-[#0284C7] dark:text-[#38BDF8]'}`}>
-                      {cust.outstandingUdhaar > 0 ? `₹${cust.outstandingUdhaar}` : '₹0 Due'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-1 text-[11px]">
-                  <span className="text-[#64748B] dark:text-[#94A3B8] truncate max-w-[200px]">
-                    {cust.lastProductOrdered}
-                  </span>
-                  <span className="text-[#0284C7] dark:text-[#38BDF8] font-semibold flex items-center gap-0.5">
-                    Inspect <ChevronRight className="w-3.5 h-3.5" />
-                  </span>
-                </div>
-              </div>
-            );
-          })
-        )}
+        <button
+          onClick={() => setAddModalOpen(true)}
+          className="h-9 px-3.5 rounded-lg bg-[#2563EB] hover:bg-[#071A35] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+        >
+          <UserPlus className="w-3.5 h-3.5" />
+          <span>{tr(language, 'Add Customer', 'ग्राहक जोड़ें')}</span>
+        </button>
       </div>
 
-      {/* Desktop Customer Data Table (hidden on mobile, visible md:table) */}
-      <div className="hidden md:block bg-white dark:bg-[#132238] rounded-2xl border border-[#E2E8F0] dark:border-[#1E293B] overflow-hidden shadow-2xs transition-colors">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-[#F8FAFC] dark:bg-[#0F172A] border-b border-[#E2E8F0] dark:border-[#1E293B] text-[#64748B] dark:text-[#94A3B8] font-semibold">
-                <th className="py-3 px-4">Customer</th>
-                <th className="py-3 px-4">Location</th>
-                <th className="py-3 px-4">Purchase Cycle</th>
-                <th className="py-3 px-4">Favorite / Last SKU</th>
-                <th className="py-3 px-4 text-right">Lifetime Spend</th>
-                <th className="py-3 px-4 text-center">COD Reliability</th>
-                <th className="py-3 px-4 text-right">Udhaar Balance</th>
-                <th className="py-3 px-4 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#F1F5F9] dark:divide-[#1E293B] text-[#334155] dark:text-[#CBD5E1]">
-              {filteredCustomers.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-8 text-center text-[#64748B] dark:text-[#94A3B8]">
-                    No customers found matching the search or segment filter.
-                  </td>
-                </tr>
-              ) : (
-                filteredCustomers.map((cust) => {
-                  const seg = getSegmentLabel(cust.segment);
-                  const isDue = cust.daysSinceLastOrder >= cust.averageOrderCadenceDays && cust.averageOrderCadenceDays > 0;
+      {/* Customer Visual Cards */}
+      {displayList.length === 0 ? (
+        <div className="p-8 rounded-2xl border border-dashed border-[#CBD5E1] dark:border-[#1E3A5F] text-center space-y-3">
+          <p className="text-sm font-bold text-[#071A35] dark:text-white">
+            {tr(language, 'No customers match this view.', 'कोई ग्राहक नहीं मिला।')}
+          </p>
+          <p className="text-xs text-[#64748B]">
+            {tr(
+              language,
+              'Add your first customer or upload a store CSV to populate Customer Memory.',
+              'ग्राहक मेमोरी शुरू करने के लिए ग्राहक जोड़ें या CSV अपलोड करें।'
+            )}
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+            <button
+              onClick={() => setAddModalOpen(true)}
+              className="h-9 px-3.5 rounded-lg bg-[#2563EB] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>{tr(language, 'Add Customer', 'ग्राहक जोड़ें')}</span>
+            </button>
+            {onNavigateTab && (
+              <button
+                onClick={() => onNavigateTab('import')}
+                className="h-9 px-3.5 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>{tr(language, 'Upload CSV', 'CSV अपलोड')}</span>
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {displayList.map((c) => {
+              const st = getStatusDisplay(language, c.segment, Number(c.outstanding_udhaar));
+              const aov = Math.round(
+                Number(c.total_spent || 0) / Math.max(1, Number(c.total_orders || 1))
+              );
 
-                  return (
-                    <tr
-                      key={cust.id}
-                      onClick={() => setActiveCustomer(cust)}
-                      className="hover:bg-[#F0F9FF] dark:hover:bg-[#0C243B] cursor-pointer transition-colors group"
-                    >
-                      {/* Name & Segment */}
-                      <td className="py-3 px-4">
-                        <div className="font-bold text-[#0F172A] dark:text-white group-hover:text-[#0284C7] dark:group-hover:text-[#38BDF8]">
-                          {cust.name}
+              return (
+                <div
+                  key={c.id}
+                  className="rounded-2xl border border-[#E2E8F0] dark:border-[#1E3A5F] bg-white dark:bg-[#0B1E40] p-4 flex flex-col justify-between gap-3 hover:border-[#2563EB] transition-colors"
+                >
+                  <div className="space-y-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-9 h-9 rounded-full bg-[#EFF6FF] dark:bg-[#071A35] text-[#2563EB] dark:text-[#22D3EE] font-extrabold text-xs flex items-center justify-center shrink-0">
+                          {getInitials(c.name)}
                         </div>
-                        <div className={`text-[11px] font-medium ${seg.color}`}>
-                          {seg.label}
-                        </div>
-                      </td>
-
-                      {/* City */}
-                      <td className="py-3 px-4 text-[#64748B] dark:text-[#94A3B8]">
-                        <div>{cust.city}</div>
-                        <div className="text-[10px] text-[#94A3B8]">{cust.state}</div>
-                      </td>
-
-                      {/* Cadence */}
-                      <td className="py-3 px-4 font-mono tabular-nums">
-                        {cust.averageOrderCadenceDays > 0 ? (
-                          <div>
-                            <span className={isDue ? 'font-bold text-[#0284C7] dark:text-[#38BDF8]' : 'text-[#334155] dark:text-[#CBD5E1]'}>
-                              {cust.daysSinceLastOrder}d
-                            </span>
-                            <span className="text-[#94A3B8]"> / {cust.averageOrderCadenceDays}d cadence</span>
+                        <div className="min-w-0">
+                          <h4 className="text-sm font-extrabold text-[#071A35] dark:text-white truncate">
+                            {c.name}
+                          </h4>
+                          <div className="text-[11px] text-[#64748B] dark:text-[#94A3B8] truncate">
+                            {c.city || 'India'} · {c.total_orders} {tr(language, 'orders', 'ऑर्डर')}
                           </div>
-                        ) : (
-                          <span className="text-[#94A3B8]">First order (2d ago)</span>
-                        )}
-                      </td>
-
-                      {/* Last SKU */}
-                      <td className="py-3 px-4 max-w-[200px] truncate" title={cust.lastProductOrdered}>
-                        <div className="font-medium truncate text-[#0F172A] dark:text-white">{cust.lastProductOrdered}</div>
-                        <div className="text-[10px] text-[#94A3B8]">{cust.primaryCategory}</div>
-                      </td>
-
-                      {/* Lifetime Spend */}
-                      <td className="py-3 px-4 text-right font-mono tabular-nums">
-                        <div className="font-semibold text-[#0F172A] dark:text-white">
-                          ₹{cust.totalSpent.toLocaleString('en-IN')}
                         </div>
-                        <div className="text-[10px] text-[#94A3B8]">{cust.totalOrders} orders</div>
-                      </td>
+                      </div>
+                    </div>
 
-                      {/* COD Reliability Score */}
-                      <td className="py-3 px-4 text-center">
-                        <span
-                          className={`font-mono tabular-nums font-semibold ${
-                            cust.codReliabilityScore >= 80
-                              ? 'text-[#0284C7] dark:text-[#38BDF8]'
-                              : cust.codReliabilityScore >= 50
-                              ? 'text-[#D97706] dark:text-[#FBBF24]'
-                              : 'text-[#DC2626] dark:text-[#F87171]'
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className={`font-bold flex items-center gap-1.5 ${st.textColor}`}>
+                        {st.icon === 'check' ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                        ) : st.icon === 'refresh' ? (
+                          <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+                        ) : st.icon === 'alert' ? (
+                          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        ) : st.icon === 'sparkles' ? (
+                          <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                        ) : (
+                          <Clock className="w-3.5 h-3.5 shrink-0" />
+                        )}
+                        <span>{st.label}</span>
+                      </span>
+                      <span className="font-bold text-[#071A35] dark:text-white tabular-nums">
+                        ₹{Number(c.total_spent).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-[#475569] dark:text-[#CBD5E1] line-clamp-2">
+                      {c.last_product_ordered
+                        ? `${tr(language, 'Usual item', 'पसंदीदा सामान')}: ${c.last_product_ordered}`
+                        : c.ai_insight ||
+                          tr(language, 'Ready for purchase tracking', 'खरीद ट्रैकिंग के लिए तैयार')}
+                    </p>
+
+                    <div className="grid grid-cols-3 gap-1.5 pt-1 text-[11px]">
+                      <div className="p-2 rounded-lg bg-[#F8FAFC] dark:bg-[#061533]">
+                        <div className="text-[#64748B]">{tr(language, 'Last order', 'पिछला ऑर्डर')}</div>
+                        <div className="font-bold tabular-nums text-[#071A35] dark:text-white">
+                          {c.days_since_last_order}
+                          {tr(language, 'd ago', ' दिन')}
+                        </div>
+                      </div>
+                      <div className="p-2 rounded-lg bg-[#F8FAFC] dark:bg-[#061533]">
+                        <div className="text-[#64748B]">{tr(language, 'Avg order', 'औसत बिल')}</div>
+                        <div className="font-bold tabular-nums text-[#071A35] dark:text-white">
+                          ₹{aov.toLocaleString('en-IN')}
+                        </div>
+                      </div>
+                      <div className="p-2 rounded-lg bg-[#F8FAFC] dark:bg-[#061533]">
+                        <div className="text-[#64748B]">{tr(language, 'Pending', 'उधार')}</div>
+                        <div
+                          className={`font-bold tabular-nums ${
+                            Number(c.outstanding_udhaar) > 0
+                              ? 'text-[#D97706]'
+                              : 'text-[#071A35] dark:text-white'
                           }`}
                         >
-                          {cust.codReliabilityScore}%
-                        </span>
-                      </td>
-
-                      {/* Udhaar */}
-                      <td className="py-3 px-4 text-right font-mono tabular-nums">
-                        {cust.outstandingUdhaar > 0 ? (
-                          <div className="font-bold text-[#DC2626] dark:text-[#F87171]">
-                            ₹{cust.outstandingUdhaar.toLocaleString('en-IN')}
-                            <div className="text-[10px] text-[#DC2626] dark:text-[#F87171]">
-                              {cust.udhaarDueDate ? 'Overdue' : 'Due'}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-[#94A3B8]">₹0</span>
-                        )}
-                      </td>
-
-                      {/* Action */}
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveCustomer(cust);
-                          }}
-                          className="px-2.5 py-1 text-xs font-medium text-[#0284C7] dark:text-[#38BDF8] hover:bg-[#E0F2FE] dark:hover:bg-[#1E3A5F] rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer"
-                        >
-                          <span>Inspect</span>
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Customer 360 Deep Drawer */}
-      {activeCustomer && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex justify-end animate-fadeIn">
-          <div className="w-full max-w-lg bg-white dark:bg-[#0B1320] h-full shadow-2xl p-6 overflow-y-auto flex flex-col justify-between border-l border-[#E2E8F0] dark:border-[#1E293B] transition-colors">
-            <div>
-              {/* Drawer Header */}
-              <div className="flex items-start justify-between pb-4 border-b border-[#E2E8F0] dark:border-[#1E293B]">
-                <div>
-                  <div className="flex items-center gap-2 text-xs text-[#64748B] dark:text-[#94A3B8] mb-1">
-                    <span>ID: {activeCustomer.id}</span>
-                    <span>·</span>
-                    <span className="text-[#0284C7] dark:text-[#38BDF8] font-medium">WhatsApp Consent Active ✓</span>
+                          ₹{Number(c.outstanding_udhaar).toLocaleString('en-IN')}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <h3 className="text-xl font-bold text-[#0F172A] dark:text-white tracking-tight">
-                    {activeCustomer.name}
-                  </h3>
-                  <div className="flex items-center gap-3 text-xs text-[#64748B] dark:text-[#94A3B8] mt-1">
-                    <span className="flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-[#0284C7]" /> {activeCustomer.city}, {activeCustomer.state}
-                    </span>
-                    <span className="flex items-center gap-1 font-mono">
-                      <Phone className="w-3 h-3 text-[#0284C7]" /> {activeCustomer.phone}
-                    </span>
+
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#E2E8F0] dark:border-[#1E3A5F]">
+                    <button
+                      onClick={() => openCustomerDrawer(c.id)}
+                      className="text-xs font-bold text-[#2563EB] dark:text-[#22D3EE] hover:underline cursor-pointer"
+                    >
+                      {tr(language, 'View Profile', 'प्रोफ़ाइल देखें')}
+                    </button>
+                    <button
+                      onClick={() => handlePrepareFollowup(c.id)}
+                      disabled={c.opted_out === 1}
+                      className="px-2.5 py-1 rounded-lg bg-[#EFF6FF] dark:bg-[#071A35] text-[11px] font-bold text-[#2563EB] dark:text-[#22D3EE] disabled:opacity-40 cursor-pointer"
+                    >
+                      {c.opted_out === 1
+                        ? tr(language, 'Opted Out', 'ऑप्ट-आउट')
+                        : tr(language, 'Send Reminder', 'रिमाइंडर तैयार करें')}
+                    </button>
                   </div>
                 </div>
+              );
+            })}
+          </div>
 
+          {!compactLanding && totalPages > 1 && (
+            <div className="flex items-center justify-between text-xs text-[#64748B] pt-1">
+              <span className="tabular-nums">
+                {tr(language, 'Page', 'पृष्ठ')} {safePage} / {totalPages} · {filtered.length}{' '}
+                {tr(language, 'customers', 'ग्राहक')}
+              </span>
+              <div className="flex items-center gap-1.5">
                 <button
-                  onClick={() => setActiveCustomer(null)}
-                  className="p-1.5 text-[#64748B] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-white hover:bg-[#F0F7FF] dark:hover:bg-[#132238] rounded-lg transition-colors cursor-pointer"
+                  disabled={safePage <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="h-8 px-2.5 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#0B1E40] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-40"
                 >
-                  <X className="w-5 h-5" />
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span>{tr(language, 'Prev', 'पिछला')}</span>
+                </button>
+                <button
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="h-8 px-2.5 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#0B1E40] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-40"
+                >
+                  <span>{tr(language, 'Next', 'अगला')}</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
-
-              {/* AI Insight Highlight */}
-              <div className="my-5 p-4 rounded-xl bg-[#F0F9FF] dark:bg-[#0C243B] border border-[#BAE6FD] dark:border-[#1E456E] shadow-2xs transition-colors">
-                <div className="flex items-center gap-2 text-xs font-bold text-[#0284C7] dark:text-[#38BDF8] uppercase tracking-wider mb-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-[#0EA5E9] dark:text-[#38BDF8]" />
-                  <span>Autonomous AI Observation</span>
-                </div>
-                <p className="text-xs text-[#0369A1] dark:text-[#BAE6FD] leading-relaxed">
-                  {activeCustomer.aiInsightSummary}
-                </p>
-              </div>
-
-              {/* Cadence & Financial Health Grid */}
-              <div className="grid grid-cols-2 gap-3 mb-5">
-                <div className="p-3 bg-[#F8FAFC] dark:bg-[#132238] rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] transition-colors">
-                  <div className="text-[11px] text-[#64748B] dark:text-[#94A3B8]">Reorder Cadence Rhythm</div>
-                  <div className="text-sm font-bold text-[#0F172A] dark:text-white font-mono tabular-nums mt-0.5">
-                    {activeCustomer.averageOrderCadenceDays > 0
-                      ? `Every ${activeCustomer.averageOrderCadenceDays} Days`
-                      : 'First Order Baseline'}
-                  </div>
-                  <div className="text-[11px] text-[#0284C7] dark:text-[#38BDF8] mt-0.5">
-                    Last purchase: {activeCustomer.daysSinceLastOrder} days ago
-                  </div>
-                </div>
-
-                <div className="p-3 bg-[#F8FAFC] dark:bg-[#132238] rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] transition-colors">
-                  <div className="text-[11px] text-[#64748B] dark:text-[#94A3B8]">COD Risk Profile</div>
-                  <div
-                    className={`text-sm font-bold font-mono tabular-nums mt-0.5 ${
-                      activeCustomer.codReliabilityScore >= 80
-                        ? 'text-[#0284C7] dark:text-[#38BDF8]'
-                        : 'text-[#DC2626] dark:text-[#F87171]'
-                    }`}
-                  >
-                    {activeCustomer.codReliabilityScore}% Reliability
-                  </div>
-                  <div className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-0.5">
-                    {activeCustomer.codReliabilityScore < 50
-                      ? 'Prepay discount nudge recommended'
-                      : 'Safe for automated COD dispatch'}
-                  </div>
-                </div>
-
-                <div className="p-3 bg-[#F8FAFC] dark:bg-[#132238] rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] transition-colors">
-                  <div className="text-[11px] text-[#64748B] dark:text-[#94A3B8]">Lifetime Revenue</div>
-                  <div className="text-sm font-bold text-[#0F172A] dark:text-white font-mono tabular-nums mt-0.5">
-                    ₹{activeCustomer.totalSpent.toLocaleString('en-IN')}
-                  </div>
-                  <div className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-0.5">
-                    {activeCustomer.totalOrders} total completed orders
-                  </div>
-                </div>
-
-                <div className="p-3 bg-[#F8FAFC] dark:bg-[#132238] rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] transition-colors">
-                  <div className="text-[11px] text-[#64748B] dark:text-[#94A3B8]">Outstanding Udhaar</div>
-                  <div
-                    className={`text-sm font-bold font-mono tabular-nums mt-0.5 ${
-                      activeCustomer.outstandingUdhaar > 0 ? 'text-[#DC2626] dark:text-[#F87171]' : 'text-[#0284C7] dark:text-[#38BDF8]'
-                    }`}
-                  >
-                    ₹{activeCustomer.outstandingUdhaar.toLocaleString('en-IN')}
-                  </div>
-                  <div className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-0.5">
-                    {activeCustomer.outstandingUdhaar > 0 ? '7 days past agreed date' : 'Zero dues'}
-                  </div>
-                </div>
-              </div>
-
-              {/* Memory Graph Notes */}
-              <div className="space-y-3 mb-5">
-                <div className="text-xs font-semibold text-[#0F172A] dark:text-white">
-                  Customer Memory Graph & Nuances
-                </div>
-                <div className="bg-[#F8FAFC] dark:bg-[#132238] p-3.5 rounded-xl border border-[#E2E8F0] dark:border-[#1E293B] text-xs text-[#334155] dark:text-[#CBD5E1] leading-relaxed transition-colors">
-                  {activeCustomer.notes}
-                </div>
-              </div>
             </div>
+          )}
+        </>
+      )}
 
-            {/* Drawer Bottom Actions */}
-            <div className="pt-4 border-t border-[#E2E8F0] dark:border-[#1E293B] flex items-center gap-2">
+      {/* Customer Profile & Unified Timeline Drawer */}
+      {(drawerData || loadingDrawer) && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex justify-end">
+          <div className="w-full max-w-xl bg-white dark:bg-[#0B1E40] h-full overflow-y-auto p-6 space-y-5 shadow-2xl border-l border-[#CBD5E1] dark:border-[#1E3A5F]">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                {drawerData && (
+                  <div className="w-11 h-11 rounded-full bg-[#2563EB] text-white font-extrabold text-sm flex items-center justify-center shrink-0">
+                    {getInitials(drawerData.customer.name)}
+                  </div>
+                )}
+                <div>
+                  <h3 className="text-lg font-extrabold text-[#071A35] dark:text-white">
+                    {drawerData?.customer.name || tr(language, 'Loading...', 'लोड हो रहा है...')}
+                  </h3>
+                  {drawerData && (
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-[#64748B] dark:text-[#94A3B8] mt-0.5">
+                      <span className="flex items-center gap-1">
+                        <Phone className="w-3.5 h-3.5" /> {drawerData.customer.phone}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <MapPin className="w-3.5 h-3.5" /> {drawerData.customer.city},{' '}
+                        {drawerData.customer.state}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
               <button
-                onClick={() => {
-                  if (onOpenDraftModal) onOpenDraftModal(activeCustomer);
-                  setActiveCustomer(null);
-                }}
-                className="flex-1 py-2.5 px-4 bg-[#0284C7] hover:bg-[#0369A1] text-white text-xs font-semibold rounded-xl transition-all shadow-sm shadow-[#0284C7]/20 flex items-center justify-center gap-1.5 cursor-pointer"
+                onClick={() => setDrawerData(null)}
+                className="p-2 rounded-lg hover:bg-[#F1F5F9] dark:hover:bg-[#061533] cursor-pointer"
               >
-                <Send className="w-3.5 h-3.5 text-[#BAE6FD]" />
-                <span>Draft Custom WhatsApp</span>
+                <X className="w-4 h-4" />
               </button>
             </div>
+
+            {drawerData && (
+              <>
+                <div className="grid grid-cols-3 gap-2.5 text-xs">
+                  <div className="p-3 rounded-xl bg-[#F8FAFC] dark:bg-[#061533]">
+                    <div className="text-[#64748B]">{tr(language, 'Total Orders', 'कुल ऑर्डर')}</div>
+                    <div className="text-base font-extrabold tabular-nums text-[#071A35] dark:text-white">
+                      {drawerData.customer.total_orders}
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[#F8FAFC] dark:bg-[#061533]">
+                    <div className="text-[#64748B]">{tr(language, 'Total Spent', 'कुल खरीद')}</div>
+                    <div className="text-base font-extrabold tabular-nums text-[#071A35] dark:text-white">
+                      ₹{Number(drawerData.customer.total_spent).toLocaleString('en-IN')}
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[#F8FAFC] dark:bg-[#061533]">
+                    <div className="text-[#64748B]">{tr(language, 'Pending Payment', 'बाकी उधार')}</div>
+                    <div className="text-base font-extrabold tabular-nums text-[#D97706]">
+                      ₹{Number(drawerData.customer.outstanding_udhaar).toLocaleString('en-IN')}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-[#EFF6FF] dark:bg-[#061533] border border-[#BFDBFE] dark:border-[#1E3A5F] space-y-1.5 text-xs">
+                  <div className="font-bold text-[#2563EB] dark:text-[#22D3EE] flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4" />
+                    <span>{tr(language, 'Customer Memory', 'ग्राहक मेमोरी')}</span>
+                  </div>
+                  <p className="text-[#071A35] dark:text-white">{drawerData.customer.ai_insight}</p>
+                  {drawerData.customer.notes && (
+                    <p className="text-[#64748B] dark:text-[#94A3B8]">{drawerData.customer.notes}</p>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => handlePrepareFollowup(drawerData.customer.id)}
+                    disabled={drawerData.customer.opted_out === 1}
+                    className="h-9 px-4 rounded-lg bg-[#2563EB] hover:bg-[#071A35] text-white text-xs font-bold cursor-pointer disabled:opacity-40"
+                  >
+                    {tr(language, 'Prepare Reminder', 'रिमाइंडर तैयार करें')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOrderItemName(drawerData.customer.last_product_ordered || 'Regular Pack');
+                      setOrderAmount(
+                        Math.max(
+                          450,
+                          Math.round(
+                            Number(drawerData.customer.total_spent || 1150) /
+                              Math.max(1, Number(drawerData.customer.total_orders || 1))
+                          )
+                        )
+                      );
+                      setOrderOpen((v) => !v);
+                    }}
+                    className="h-9 px-3 rounded-lg border border-[#16A34A] text-[#16A34A] hover:bg-[#16A34A] hover:text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <ShoppingBag className="w-3.5 h-3.5" />
+                    <span>{tr(language, 'Record Repeat Order', 'नया रीऑर्डर दर्ज करें')}</span>
+                  </button>
+                  <button
+                    onClick={() => handleToggleOptOut(drawerData.customer)}
+                    className="h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {drawerData.customer.opted_out === 1 ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-[#16A34A]" />
+                        <span>{tr(language, 'Re-enable WhatsApp Consent', 'सहमति दोबारा चालू करें')}</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShieldOff className="w-3.5 h-3.5 text-[#DC2626]" />
+                        <span>{tr(language, 'Mark Opted Out', 'ऑप्ट-आउट चिह्नित करें')}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {orderOpen && (
+                  <form
+                    onSubmit={handleRecordRepeatOrder}
+                    className="p-3.5 rounded-xl bg-[#EFF6FF] dark:bg-[#061533] border border-[#BFDBFE] dark:border-[#1E3A5F] space-y-2.5 text-xs"
+                  >
+                    <div className="font-bold text-[#071A35] dark:text-white">
+                      {tr(
+                        language,
+                        'Log Repeat Order (verifies open recovery workflows automatically)',
+                        'रीऑर्डर दर्ज करें (खुले रिकवरी कार्य अपने आप सत्यापित होंगे)'
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        value={orderItemName}
+                        onChange={(e) => setOrderItemName(e.target.value)}
+                        placeholder={tr(language, 'Product name', 'उत्पाद का नाम')}
+                        className="h-8 px-2.5 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#0B1E40]"
+                      />
+                      <input
+                        type="number"
+                        min={1}
+                        value={orderAmount}
+                        onChange={(e) => setOrderAmount(Number(e.target.value))}
+                        placeholder="₹"
+                        className="h-8 px-2.5 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#0B1E40] tabular-nums"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="submit"
+                        disabled={recordingOrder}
+                        className="h-8 px-3 rounded-lg bg-[#16A34A] text-white font-bold cursor-pointer disabled:opacity-50"
+                      >
+                        {recordingOrder
+                          ? tr(language, 'Saving...', 'सहेज रहे हैं...')
+                          : tr(language, 'Save Prepaid Order', 'प्रीपेड ऑर्डर सहेजें')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOrderOpen(false)}
+                        className="h-8 px-3 rounded-lg border border-[#CBD5E1] font-semibold cursor-pointer"
+                      >
+                        {tr(language, 'Cancel', 'रद्द करें')}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* Unified Chronological Customer Activity Timeline */}
+                <div className="space-y-2.5">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#64748B] flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" />{' '}
+                    {tr(language, 'Customer Activity Timeline', 'ग्राहक गतिविधि टाइमलाइन')}
+                  </h4>
+                  {(drawerData.timeline?.length || 0) === 0 ? (
+                    <p className="text-xs text-[#64748B]">
+                      {tr(language, 'No activity recorded yet.', 'अभी कोई गतिविधि दर्ज नहीं है।')}
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {drawerData.timeline!.map((ev) => {
+                        const icon =
+                          ev.type === 'order' ? (
+                            <ShoppingBag className="w-3.5 h-3.5 text-[#2563EB] dark:text-[#22D3EE]" />
+                          ) : ev.type === 'payment' ? (
+                            <IndianRupee className="w-3.5 h-3.5 text-[#16A34A]" />
+                          ) : ev.type === 'message' ? (
+                            <MessageSquare className="w-3.5 h-3.5 text-[#2563EB] dark:text-[#22D3EE]" />
+                          ) : (
+                            <Sparkles className="w-3.5 h-3.5 text-[#D97706]" />
+                          );
+
+                        return (
+                          <div
+                            key={`${ev.type}-${ev.id}`}
+                            className="p-3 rounded-xl border border-[#E2E8F0] dark:border-[#1E3A5F] bg-[#F8FAFC] dark:bg-[#061533] text-xs flex items-start justify-between gap-3"
+                          >
+                            <div className="flex items-start gap-2.5 min-w-0">
+                              <div className="mt-0.5 shrink-0">{icon}</div>
+                              <div className="min-w-0">
+                                <div className="font-bold text-[#071A35] dark:text-white">{ev.title}</div>
+                                <div className="text-[#475569] dark:text-[#CBD5E1] break-words">
+                                  {ev.subtitle}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              {ev.amount !== undefined && (
+                                <div className="font-extrabold tabular-nums text-[#071A35] dark:text-white">
+                                  ₹{Number(ev.amount).toLocaleString('en-IN')}
+                                </div>
+                              )}
+                              <div className="text-[11px] text-[#64748B]">
+                                {localizeWorkflowStatus(language, ev.status)}
+                              </div>
+                              <div className="text-[10px] text-[#64748B] tabular-nums">
+                                {ev.timestamp.slice(0, 10)}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
 
-      {/* Dynamic "+ Add New Customer" Modal */}
-      {isAddCustomerOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-white dark:bg-[#132238] rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#BAE6FD] dark:border-[#1E3A5F] space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0] dark:border-[#1E3A5F]">
-              <h3 className="text-base font-bold text-[#0F172A] dark:text-[#F8FAFC] flex items-center gap-2">
-                <User className="w-4 h-4 text-[#0284C7] dark:text-[#38BDF8]" />
-                <span>Register New Customer Khata</span>
+      {/* Add Customer Modal */}
+      {addModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#0B1E40] border border-[#CBD5E1] dark:border-[#1E3A5F] p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-extrabold text-[#071A35] dark:text-white">
+                {tr(language, 'Add New Customer', 'नया ग्राहक जोड़ें')}
               </h3>
-              <button
-                onClick={() => setIsAddCustomerOpen(false)}
-                className="p-1.5 text-[#64748B] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-white rounded-lg transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
+              <button onClick={() => setAddModalOpen(false)} className="p-1.5 cursor-pointer">
+                <X className="w-4 h-4" />
               </button>
             </div>
-
-            <form onSubmit={handleCreateCustomer} className="space-y-3 text-xs">
+            <form onSubmit={handleAddSubmit} className="space-y-3 text-xs">
               <div>
-                <label className="text-[11px] font-medium text-[#475569] dark:text-[#CBD5E1] block mb-1">
-                  Full Customer Name *
+                <label className="block font-semibold mb-1">
+                  {tr(language, 'Full Name *', 'पूरा नाम *')}
                 </label>
                 <input
-                  type="text"
                   required
-                  placeholder="e.g. Ramesh Kumar"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  className="w-full p-2.5 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#0F1A2C] text-[#0F172A] dark:text-[#F8FAFC] focus:outline-none focus:ring-1 focus:ring-[#0284C7]"
+                  placeholder={tr(language, 'e.g. Ramesh Kulkarni', 'उदा. रमेश कुलकर्णी')}
+                  className="w-full h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#061533]"
                 />
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] font-medium text-[#475569] dark:text-[#CBD5E1] block mb-1">
-                    Phone Number (WhatsApp)
+                  <label className="block font-semibold mb-1">
+                    {tr(language, 'WhatsApp Phone *', 'WhatsApp नंबर *')}
                   </label>
                   <input
-                    type="text"
                     required
                     value={newPhone}
                     onChange={(e) => setNewPhone(e.target.value)}
-                    className="w-full p-2.5 font-mono rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#0F1A2C] text-[#0F172A] dark:text-[#F8FAFC] focus:outline-none focus:ring-1 focus:ring-[#0284C7]"
+                    placeholder="+91 98..."
+                    className="w-full h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#061533]"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-medium text-[#475569] dark:text-[#CBD5E1] block mb-1">
-                    City
-                  </label>
+                  <label className="block font-semibold mb-1">{tr(language, 'City', 'शहर')}</label>
                   <input
-                    type="text"
-                    placeholder="e.g. Pune, Jaipur"
                     value={newCity}
                     onChange={(e) => setNewCity(e.target.value)}
-                    className="w-full p-2.5 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#0F1A2C] text-[#0F172A] dark:text-[#F8FAFC] focus:outline-none focus:ring-1 focus:ring-[#0284C7]"
+                    placeholder={tr(language, 'Pune', 'पुणे')}
+                    className="w-full h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#061533]"
                   />
                 </div>
               </div>
-
               <div>
-                <label className="text-[11px] font-medium text-[#475569] dark:text-[#CBD5E1] block mb-1">
-                  Primary SKU / Product Preference
+                <label className="block font-semibold mb-1">
+                  {tr(language, 'Regular Product', 'नियमित उत्पाद')}
                 </label>
                 <input
-                  type="text"
-                  placeholder="e.g. Organic Kashmiri Saffron (2g)"
                   value={newProduct}
                   onChange={(e) => setNewProduct(e.target.value)}
-                  className="w-full p-2.5 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#0F1A2C] text-[#0F172A] dark:text-[#F8FAFC] focus:outline-none focus:ring-1 focus:ring-[#0284C7]"
+                  placeholder={tr(language, 'e.g. Organic Tea 1kg', 'उदा. ऑर्गेनिक चाय 1kg')}
+                  className="w-full h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#061533]"
                 />
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] font-medium text-[#475569] dark:text-[#CBD5E1] block mb-1">
-                    Reorder Cycle (Days)
+                  <label className="block font-semibold mb-1">
+                    {tr(language, 'Usual Reorder Days', 'रीऑर्डर अंतराल (दिन)')}
                   </label>
                   <input
                     type="number"
-                    min="7"
-                    max="180"
+                    min={1}
                     value={newCadence}
                     onChange={(e) => setNewCadence(Number(e.target.value))}
-                    className="w-full p-2.5 font-mono rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#0F1A2C] text-[#0F172A] dark:text-[#F8FAFC] focus:outline-none focus:ring-1 focus:ring-[#0284C7]"
+                    className="w-full h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#061533]"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-medium text-[#475569] dark:text-[#CBD5E1] block mb-1">
-                    Starting Udhaar (₹)
+                  <label className="block font-semibold mb-1">
+                    {tr(language, 'Pending Balance (₹)', 'बाकी उधार (₹)')}
                   </label>
                   <input
                     type="number"
-                    min="0"
-                    step="50"
+                    min={0}
                     value={newUdhaar}
                     onChange={(e) => setNewUdhaar(Number(e.target.value))}
-                    className="w-full p-2.5 font-mono rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#0F1A2C] text-[#0F172A] dark:text-[#F8FAFC] focus:outline-none focus:ring-1 focus:ring-[#0284C7]"
+                    className="w-full h-9 px-3 rounded-lg border border-[#CBD5E1] dark:border-[#1E3A5F] bg-white dark:bg-[#061533]"
                   />
                 </div>
               </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-[#E2E8F0] dark:border-[#1E3A5F]">
-                <button
-                  type="button"
-                  onClick={() => setIsAddCustomerOpen(false)}
-                  className="px-3 py-1.5 text-xs text-[#64748B] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-white cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-[#0284C7] hover:bg-[#0369A1] text-white text-xs font-semibold rounded-xl transition-colors shadow-sm shadow-[#0284C7]/20 cursor-pointer"
-                >
-                  Save Customer Profile
-                </button>
-              </div>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full h-10 rounded-lg bg-[#2563EB] hover:bg-[#071A35] text-white font-bold cursor-pointer disabled:opacity-50"
+              >
+                {submitting
+                  ? tr(language, 'Saving...', 'सहेज रहे हैं...')
+                  : tr(language, 'Save Customer', 'ग्राहक सहेजें')}
+              </button>
             </form>
           </div>
         </div>

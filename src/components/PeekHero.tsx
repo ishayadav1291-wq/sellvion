@@ -1,31 +1,49 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
-  Sparkles,
+  Bot,
   ArrowRight,
   ShieldCheck,
   TrendingUp,
   Users,
-  X,
-  Play,
   ShoppingCart,
   IndianRupee,
   MessageCircle,
+  Sparkles,
   Store,
-  Check,
 } from 'lucide-react';
 import { ProductTourTab } from './ProductTour';
+import { AgenticHeroCanvas } from './AgenticHeroCanvas';
+import {
+  AgentSummary,
+  AnalyticsSummaryResponse,
+  AppLanguage,
+  ConsoleTabId,
+  CustomerRecord,
+  WorkflowRecord,
+} from '../types';
+import { t, tr } from '../i18n/translations';
 
 interface PeekHeroProps {
-  onOpenConsole: (tab?: string) => void;
+  language: AppLanguage;
+  onOpenConsole: (tab?: ConsoleTabId) => void;
   onSelectTourTab: (tab: ProductTourTab) => void;
+  agents: AgentSummary[];
+  workflows: WorkflowRecord[];
+  customers: CustomerRecord[];
+  analytics: AnalyticsSummaryResponse | null;
+  onActionQueued?: (msg: string) => void;
 }
 
 export const PeekHero: React.FC<PeekHeroProps> = ({
+  language,
   onOpenConsole,
   onSelectTourTab,
+  agents,
+  workflows,
+  customers,
+  analytics,
+  onActionQueued,
 }) => {
-  const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
-
   const jumpToTour = (tab: ProductTourTab) => {
     onSelectTourTab(tab);
     const el = document.getElementById('how-it-works');
@@ -36,111 +54,105 @@ export const PeekHero: React.FC<PeekHeroProps> = ({
 
   return (
     <div id="home" className="space-y-12 scroll-mt-24">
-      {/* Hero Headline Section Matching Reference Design */}
-      <section className="relative pt-6 pb-4 overflow-hidden">
-        {/* Soft cyan & skyblue ambient wave backdrop */}
-        <div className="absolute top-0 right-0 -z-10 w-[550px] h-[550px] bg-gradient-to-bl from-[#00BAF2]/25 via-[#38BDF8]/15 to-transparent rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute top-1/3 left-0 -z-10 w-96 h-96 bg-[#0066FF]/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="hidden lg:block absolute -right-20 top-10 w-96 h-96 border-[40px] border-[#00BAF2]/10 rounded-full pointer-events-none" />
+      {/* 1. HOME HERO SECTION MATCHING RECORDING & REFERENCE REPOSITORY */}
+      <section className="relative -mx-4 sm:-mx-6 lg:-mx-8 -mt-8 overflow-hidden bg-gradient-to-br from-white via-[#F8FAFC] to-[#EFF6FF] dark:from-[#071A35] dark:via-[#092045] dark:to-[#0B2956] text-[#071A35] dark:text-white border-b border-[#E2E8F0] dark:border-[#1E3A5F] transition-colors duration-150">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-spatial-grid opacity-75 dark:opacity-60"
+        />
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-6 items-center">
-          {/* Left Column: Copy & Actions */}
-          <div className="lg:col-span-5 space-y-6 text-left">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#EAF2FF] dark:bg-[#0C243B] border border-[#BAE6FD] dark:border-[#1E456E] text-xs font-semibold text-[#0066FF] dark:text-[#38BDF8] shadow-xs">
-              <Sparkles className="w-3.5 h-3.5 text-[#00BAF2]" />
-              <span>AI-Powered for Merchants</span>
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16 grid lg:grid-cols-12 gap-8 lg:gap-10 items-center">
+          {/* Left Column: Hero Copy, Loop Cadence, CTAs & Live Store Metrics */}
+          <div className="lg:col-span-5 space-y-5">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#2563EB] dark:text-[#22D3EE]">
+              <Bot className="w-4 h-4 shrink-0" />
+              <span>{t(language, 'heroEyebrow')}</span>
             </div>
 
-            <h1 className="text-4xl sm:text-5xl lg:text-[45px] font-extrabold text-[#0F1E36] dark:text-white tracking-tight leading-[1.12] font-display">
-              Your AI Merchant<br />
-              Teammate for<br />
-              Higher Sales &<br />
-              <span className="text-[#0066FF] dark:text-[#38BDF8] relative inline-block mt-0.5">
-                Customer Retention
-                <svg
-                  className="absolute -bottom-2 left-0 w-full h-3 text-[#0066FF] dark:text-[#38BDF8]"
-                  viewBox="0 0 300 12"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M2 9C50 3 150 1 298 7"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </span>
+            <h1 className="font-display text-4xl sm:text-5xl font-extrabold tracking-tight text-[#071A35] dark:text-white leading-[1.06]">
+              {t(language, 'heroTitle')}
             </h1>
 
-            <p className="text-base sm:text-lg text-[#475569] dark:text-[#94A3B8] leading-relaxed max-w-lg">
-              Understand customers, predict demand, reduce COD risk, recover missed sales and automate collections — all in one platform.
+            <p className="text-base text-[#475569] dark:text-[#CBD5E1] max-w-xl leading-relaxed">
+              {t(language, 'heroSubtitle')}
             </p>
 
-            {/* Hero CTA Button Strip */}
+            {/* Operational Loop Cadence */}
+            <div className="text-[11px] font-mono font-semibold text-[#64748B] dark:text-[#94A3B8] tracking-wide">
+              {tr(
+                language,
+                'UNDERSTAND · DECIDE · ACT · VERIFY · MEASURE',
+                'समझें · निर्णय लें · कार्य करें · सत्यापित करें · मापें'
+              )}
+            </div>
+
             <div className="flex flex-wrap items-center gap-3 pt-1">
               <button
                 onClick={() => onOpenConsole('agents')}
-                className="px-6 py-3.5 text-sm font-bold text-white bg-[#0066FF] hover:bg-[#0052CC] rounded-xl transition-all shadow-lg shadow-[#0066FF]/25 hover:shadow-xl flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
+                className="h-12 px-6 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-sm font-bold flex items-center gap-2 shadow-[0_8px_24px_rgba(37,99,235,0.28)] transition-colors cursor-pointer"
               >
-                <span>Explore AI Teammates</span>
-                <ArrowRight className="w-4 h-4 text-white" />
+                <span>{t(language, 'tryDemoBtn')}</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
 
-              <button
-                onClick={() => setIsVideoModalOpen(true)}
-                className="px-5 py-3.5 text-sm font-semibold text-[#0F1E36] dark:text-[#F8FAFC] bg-white dark:bg-[#132238] border border-[#CBD5E1] dark:border-[#1E3A5F] hover:border-[#0066FF] hover:bg-[#F8FAFC] dark:hover:bg-[#1A2E4C] rounded-xl transition-all shadow-2xs flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
+              <a
+                href="#teammates"
+                className="h-12 px-6 rounded-xl border border-[#CBD5E1] dark:border-[#335C8E] bg-white dark:bg-[#0B254B] hover:border-[#2563EB] dark:hover:border-[#22D3EE] text-[#071A35] dark:text-white text-sm font-bold inline-flex items-center justify-center transition-colors"
               >
-                <div className="w-5 h-5 rounded-full bg-[#0066FF] text-white flex items-center justify-center">
-                  <Play className="w-2.5 h-2.5 fill-current ml-0.5" />
-                </div>
-                <span>Watch Demo (1 min)</span>
-              </button>
+                {tr(language, 'Meet the 5 Teammates', '5 AI साथियों से मिलें')}
+              </a>
             </div>
 
-            {/* Trust Badges Row */}
-            <div className="flex flex-wrap items-center gap-5 pt-1 text-xs font-semibold text-[#334155] dark:text-[#94A3B8]">
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 rounded-full bg-[#10B981]/20 text-[#10B981] flex items-center justify-center">
-                  <Check className="w-3 h-3 stroke-[3]" />
+            {/* Real Store Live Metrics */}
+            <div className="grid grid-cols-3 gap-4 pt-4 border-t border-[#E2E8F0] dark:border-[#1E3A5F] text-xs">
+              <div>
+                <div className="text-xl font-extrabold text-[#071A35] dark:text-white tabular-nums">
+                  {analytics?.actualObserved.totalCustomers ?? customers.length}
                 </div>
-                <span>No setup fee</span>
+                <div className="text-[#64748B] dark:text-[#94A3B8]">
+                  {tr(language, 'Buyers remembered', 'याद रखे गए ग्राहक')}
+                </div>
               </div>
-
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 rounded-full bg-[#10B981]/20 text-[#10B981] flex items-center justify-center">
-                  <Check className="w-3 h-3 stroke-[3]" />
+              <div>
+                <div className="text-xl font-extrabold text-[#2563EB] dark:text-[#22D3EE] tabular-nums">
+                  {analytics?.opportunities.pendingApprovals ?? 0}
                 </div>
-                <span>Quick onboarding</span>
+                <div className="text-[#64748B] dark:text-[#94A3B8]">
+                  {tr(language, 'Pending your tap', 'मंजूरी बाकी')}
+                </div>
               </div>
-
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 rounded-full bg-[#10B981]/20 text-[#10B981] flex items-center justify-center">
-                  <Check className="w-3 h-3 stroke-[3]" />
+              <div>
+                <div className="text-xl font-extrabold text-[#071A35] dark:text-white tabular-nums">
+                  {analytics?.actualObserved.executedActions ?? 0}
                 </div>
-                <span>Built for Indian merchants</span>
+                <div className="text-[#64748B] dark:text-[#94A3B8]">
+                  {tr(language, 'Verified actions', 'सत्यापित कार्य')}
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Right Column: Exact 3D Bot with Laptop Dashboard & Storefront */}
-          <div className="lg:col-span-7 relative flex justify-center items-center">
-            <div className="relative w-full">
-              <img
-                src="/assets/aistudio/hero_bot_laptop_clean.png"
-                alt="SELLVION AI Merchant Teammate Robot with Laptop Dashboard and Storefront"
-                className="w-full h-auto object-contain select-none pointer-events-none drop-shadow-xl"
-              />
-            </div>
+          {/* Right Column: Interactive Multi-Agent Command Graph */}
+          <div className="lg:col-span-7">
+            <AgenticHeroCanvas
+              language={language}
+              agents={agents}
+              workflows={workflows}
+              onOpenConsole={onOpenConsole}
+              onActionQueued={onActionQueued}
+            />
           </div>
         </div>
       </section>
 
-      {/* 6 Feature Capability Cards Bar */}
-      <section className="bg-white dark:bg-[#132238] rounded-3xl border border-[#E2E8F0] dark:border-[#1E3A5F] p-6 lg:p-8 shadow-sm transition-colors">
+      {/* PRESERVED: 6 Feature Capability Cards Bar */}
+      <section
+        id="teammates"
+        className="scroll-mt-24 bg-white dark:bg-[#132238] rounded-3xl border border-[#E2E8F0] dark:border-[#1E3A5F] p-6 lg:p-8 shadow-sm transition-colors"
+      >
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 divide-y lg:divide-y-0 lg:divide-x divide-[#F1F5F9] dark:divide-[#1E3A5F]">
           <div
-            onClick={() => jumpToTour('whatsapp')}
+            onClick={() => jumpToTour('customers')}
             className="flex flex-col items-center text-center p-3 pt-4 lg:pt-3 hover:bg-[#F0F9FF] dark:hover:bg-[#1A2E4C] rounded-2xl transition-all cursor-pointer group"
           >
             <div className="w-12 h-12 rounded-2xl bg-[#E0F2FE] dark:bg-[#0C2E4E] text-[#0066FF] dark:text-[#38BDF8] flex items-center justify-center mb-3 shadow-xs group-hover:scale-110 transition-transform">
@@ -215,7 +227,7 @@ export const PeekHero: React.FC<PeekHeroProps> = ({
           </div>
 
           <div
-            onClick={() => jumpToTour('calculator')}
+            onClick={() => onOpenConsole('agents')}
             className="flex flex-col items-center text-center p-3 pt-4 lg:pt-3 hover:bg-[#F0F9FF] dark:hover:bg-[#1A2E4C] rounded-2xl transition-all cursor-pointer group"
           >
             <div className="w-12 h-12 rounded-2xl bg-[#E0F2FE] dark:bg-[#0C2E4E] text-[#0066FF] dark:text-[#38BDF8] flex items-center justify-center mb-3 shadow-xs group-hover:scale-110 transition-transform">
@@ -231,7 +243,7 @@ export const PeekHero: React.FC<PeekHeroProps> = ({
         </div>
       </section>
 
-      {/* Bottom Stats Strip */}
+      {/* PRESERVED: Bottom Stats Strip */}
       <section className="bg-[#F0F7FF] dark:bg-[#0C243B] border border-[#D6E8FF] dark:border-[#1E456E] rounded-2xl p-4 lg:p-6 shadow-xs">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 items-center">
           <div className="flex items-center gap-3 justify-center md:justify-start">
@@ -291,52 +303,6 @@ export const PeekHero: React.FC<PeekHeroProps> = ({
           </div>
         </div>
       </section>
-
-      {/* 1-Minute Demo Video Modal */}
-      {isVideoModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-white dark:bg-[#132238] rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-[#BAE6FD] dark:border-[#1E3A5F] space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0] dark:border-[#1E3A5F]">
-              <div className="flex items-center gap-2">
-                <Play className="w-4 h-4 text-[#0066FF] dark:text-[#38BDF8]" />
-                <h3 className="text-base font-bold text-[#0F1E36] dark:text-[#F8FAFC]">
-                  How SELLVION Works in 60 Seconds
-                </h3>
-              </div>
-              <button
-                onClick={() => setIsVideoModalOpen(false)}
-                className="p-1.5 text-[#64748B] dark:text-[#94A3B8] hover:text-[#0F1E36] dark:hover:text-white rounded-lg transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="aspect-video bg-[#0F1E36] rounded-2xl flex flex-col items-center justify-center p-6 text-white text-center space-y-3 relative overflow-hidden">
-              <div className="w-14 h-14 rounded-full bg-[#0066FF] text-white flex items-center justify-center shadow-lg shadow-[#0066FF]/40 cursor-pointer hover:scale-105 transition-transform">
-                <Play className="w-6 h-6 fill-current ml-1" />
-              </div>
-              <div>
-                <div className="text-sm font-bold">See Live Store Walkthrough</div>
-                <div className="text-xs text-[#BAE6FD] mt-1">
-                  Approve WhatsApp drafts, stop risky COD shipments, and track udhaar payments.
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-[#E2E8F0] dark:border-[#1E3A5F]">
-              <button
-                onClick={() => {
-                  setIsVideoModalOpen(false);
-                  onOpenConsole('inbox');
-                }}
-                className="px-5 py-2.5 bg-[#0066FF] hover:bg-[#0052CC] text-white text-xs font-semibold rounded-xl cursor-pointer"
-              >
-                Open Merchant Workspace →
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
